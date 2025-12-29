@@ -94,20 +94,22 @@
                 新增吉他庫存</h2>
         </div>
         <div class="flex flex-col items-center justify-center pt-6 pb-2 px-4">
-            <div class="relative group cursor-pointer">
-                <div
+            <input type="file" id="image-upload" accept="image/*" class="hidden" onchange="previewImage(this)">
+            <div class="relative group cursor-pointer" onclick="document.getElementById('image-upload').click()">
+                <div id="image-preview-container"
                     class="overflow-hidden w-28 h-28 rounded-full border-4 border-dashed border-primary/30 group-hover:border-primary transition-colors flex items-center justify-center bg-surface-dark relative">
-                    <span
+                    <span id="upload-icon"
                         class="material-symbols-outlined text-4xl text-primary/50 group-hover:text-primary transition-colors">add_a_photo</span>
+                    <img id="image-preview" class="hidden w-full h-full object-cover">
                 </div>
                 <div
                     class="absolute bottom-0 right-0 bg-primary rounded-full p-1.5 shadow-lg border-2 border-background-dark flex items-center justify-center">
                     <span class="material-symbols-outlined text-black text-sm font-bold">edit</span>
                 </div>
             </div>
-            <p
+            <p onclick="document.getElementById('image-upload').click()"
                 class="text-primary text-sm font-medium leading-normal pb-3 pt-3 text-center cursor-pointer hover:underline">
-                上傳照片</p>
+                從相簿選取照片</p>
         </div>
         <div class="px-4 pt-4">
             <h3
@@ -255,6 +257,38 @@
         </div>
 
         <script>
+            let selectedImageData = null;
+
+            function previewImage(input) {
+                if (input.files && input.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = function (e) {
+                        const img = new Image();
+                        img.onload = function () {
+                            // 使用 Canvas 壓縮圖片以節省 localStorage 空間
+                            const canvas = document.createElement('canvas');
+                            const MAX_WIDTH = 400;
+                            const scaleSize = MAX_WIDTH / img.width;
+                            canvas.width = MAX_WIDTH;
+                            canvas.height = img.height * scaleSize;
+
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                            selectedImageData = canvas.toDataURL('image/jpeg', 0.7);
+
+                            const preview = document.getElementById('image-preview');
+                            const icon = document.getElementById('upload-icon');
+                            preview.src = selectedImageData;
+                            preview.classList.remove('hidden');
+                            icon.classList.add('hidden');
+                        };
+                        img.src = e.target.result;
+                    };
+                    reader.readAsDataURL(input.files[0]);
+                }
+            }
+
             function setStatus(status) {
                 const btnNew = document.getElementById('btn-status-new');
                 const btnUsed = document.getElementById('btn-status-used');
@@ -290,6 +324,7 @@
                     id: Date.now(),
                     brand, model, year, origin, serial, status, amount, currency,
                     date: document.getElementById('input-date').value,
+                    image: selectedImageData,
                     inStock: true
                 };
 
