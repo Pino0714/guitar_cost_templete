@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html class="dark" lang="zh-Hant">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+        name="viewport" />
+    <title>吉他庫存</title>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#53d22d",
+                        "background-dark": "#152012",
+                        "surface-dark": "#1f251d",
+                        "text-secondary": "#a5b6a0",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "system-ui", "sans-serif"]
+                    }
+                },
+            },
+        }
+    </script>
+    <style>
+        :root {
+            --safe-area-bottom: env(safe-area-inset-bottom);
+        }
+
+        body {
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .glass-effect {
+            background: rgba(31, 37, 29, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .ios-tab-bar {
+            padding-bottom: calc(12px + var(--safe-area-bottom));
+        }
+    </style>
+</head>
+
+<body class="bg-background-dark text-white font-display antialiased min-h-screen">
+    <div
+        class="relative flex h-full min-h-screen w-full flex-col overflow-x-hidden max-w-md mx-auto shadow-2xl bg-background-dark pb-32">
+        <!-- Header -->
+        <header class="p-8 pt-12">
+            <h1 class="text-4xl font-extrabold tracking-tight">Stitch</h1>
+            <p class="text-text-secondary mt-1">早安，這是您今日的概況</p>
+        </header>
+
+        <!-- Dashboard Grid -->
+        <main class="px-6 grid grid-cols-2 gap-4">
+            <!-- 匯率追蹤 -->
+            <a href="code.html"
+                class="col-span-2 bg-surface-dark p-6 rounded-3xl border border-white/5 flex flex-col justify-between h-40 group active:scale-95 transition-all">
+                <div class="flex justify-between items-start">
+                    <div class="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center">
+                        <span class="material-symbols-outlined text-primary">currency_exchange</span>
+                    </div>
+                    <span
+                        class="material-symbols-outlined text-text-secondary group-hover:translate-x-1 transition-transform">arrow_forward_ios</span>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold">匯率追蹤</h3>
+                    <p class="text-text-secondary text-sm">JPY 0.2150 / USD 31.2</p>
+                </div>
+            </a>
+
+            <!-- 單品庫存管理 -->
+            <a href="../單品庫存管理/code.html"
+                class="bg-primary p-6 rounded-3xl border border-white/10 flex flex-col justify-between h-44 active:scale-95 transition-all relative overflow-hidden shadow-lg shadow-primary/20">
+                <div class="h-10 w-10 bg-black/10 rounded-full flex items-center justify-center">
+                    <span class="material-symbols-outlined text-black">grid_view</span>
+                </div>
+                <div>
+                    <h3 class="font-bold text-lg text-black">單品庫存管理</h3>
+                    <p class="text-xs text-black/70 font-semibold">庫存清單與狀態</p>
+                </div>
+                <div class="absolute right-[-10px] bottom-[-10px] opacity-20 rotate-12">
+                    <span class="material-symbols-outlined text-8xl text-black">grid_view</span>
+                </div>
+            </a>
+
+            <!-- 成本計算 -->
+            <a href="../落地成本計算器/code.html"
+                class="bg-surface-dark p-6 rounded-3xl border border-white/5 flex flex-col justify-between h-44 active:scale-95 transition-all">
+                <div class="w-12 h-12 bg-orange-500/20 rounded-2xl flex items-center justify-center">
+                    <span class="material-symbols-outlined text-orange-400">calculate</span>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold">落地成本</h3>
+                    <p class="text-text-secondary text-xs">進口成本估算</p>
+                </div>
+            </a>
+
+            <!-- 銷售利潤 -->
+            <a href="../銷售記錄與利潤分析/code.html"
+                class="bg-surface-dark p-6 rounded-3xl border border-white/5 flex flex-col justify-between h-44 active:scale-95 transition-all">
+                <div class="w-12 h-12 bg-pink-500/20 rounded-2xl flex items-center justify-center">
+                    <span class="material-symbols-outlined text-pink-400">analytics</span>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold">銷售利潤</h3>
+                    <p class="text-text-secondary text-xs">本月分析</p>
+                </div>
+            </a>
+        </main>
+
+        <!-- iOS Bottom Tab Bar -->
+        <nav
+            class="fixed bottom-0 left-0 right-0 glass-effect ios-tab-bar px-6 flex justify-between items-center z-50 max-w-md mx-auto">
+            <a href="dashboard.html" class="flex flex-col items-center p-3 text-primary">
+                <span class="material-symbols-outlined fill-[1]">home</span>
+                <span class="text-[10px] mt-1 font-bold">首頁</span>
+            </a>
+            <a href="code.html" class="flex flex-col items-center p-3 text-text-secondary">
+                <span class="material-symbols-outlined">payments</span>
+                <span class="text-[10px] mt-1">匯率</span>
+            </a>
+            <a href="../單品庫存管理/code.html" class="flex flex-col items-center p-3 text-text-secondary">
+                <span class="material-symbols-outlined">box</span>
+                <span class="text-[10px] mt-1">庫存</span>
+            </a>
+            <a href="../落地成本計算器/code.html" class="flex flex-col items-center p-3 text-text-secondary">
+                <span class="material-symbols-outlined">receipt_long</span>
+                <span class="text-[10px] mt-1">成本</span>
+            </a>
+            <a href="../銷售記錄與利潤分析/code.html" class="flex flex-col items-center p-3 text-text-secondary">
+                <span class="material-symbols-outlined">monitoring</span>
+                <span class="text-[10px] mt-1">分析</span>
+            </a>
+        </nav>
+    </div>
+</body>
+
+</html>

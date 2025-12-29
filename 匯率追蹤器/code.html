@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html class="dark" lang="zh-Hant">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+        name="viewport" />
+    <title>匯率追蹤器</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&amp;display=swap"
+        rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#53d22d",
+                        "background-light": "#f6f8f6",
+                        "background-dark": "#152012",
+                        "surface-dark": "#1f251d",
+                        "text-secondary": "#a5b6a0",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"]
+                    },
+                    borderRadius: { "DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+    <style>
+        body {
+            min-height: max(884px, 100dvh);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .glass-effect {
+            background: rgba(31, 37, 29, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .ios-tab-bar {
+            padding-bottom: calc(12px + env(safe-area-inset-bottom));
+        }
+
+        /* Modal Animation */
+        #modal-content {
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+    </style>
+</head>
+
+<body
+    class="bg-background-light dark:bg-background-dark font-display antialiased min-h-screen flex flex-col items-center">
+    <div
+        class="w-full max-w-md bg-background-light dark:bg-background-dark min-h-screen relative flex flex-col overflow-hidden shadow-2xl">
+        <header
+            class="flex items-center justify-between p-6 pb-4 bg-background-light dark:bg-background-dark sticky top-0 z-20">
+            <h1 class="text-gray-900 dark:text-white text-2xl font-bold leading-tight tracking-tight">匯率追蹤</h1>
+            <button
+                class="flex items-center justify-center p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+                <span class="material-symbols-outlined text-gray-900 dark:text-white"
+                    style="font-size: 24px;">settings</span>
+            </button>
+        </header>
+
+        <!-- Add Currency Modal -->
+        <div id="add-currency-modal" class="fixed inset-0 z-[60] hidden">
+            <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="toggleModal(false)"></div>
+            <div class="absolute bottom-0 left-0 right-0 p-6 bg-surface-dark rounded-t-3xl border-t border-white/10 shadow-2xl transform transition-transform duration-300 translate-y-full"
+                id="modal-content">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-bold text-white">新增追蹤匯率</h3>
+                    <button onclick="toggleModal(false)" class="p-2 rounded-full hover:bg-white/10 text-gray-400">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+
+                <form onsubmit="addCurrencyPair(event)" class="flex flex-col gap-4">
+                    <div class="flex gap-3 items-center">
+                        <div class="flex-1">
+                            <label class="text-xs text-text-secondary mb-1 block">持有幣別 (Base)</label>
+                            <select id="currency-base"
+                                class="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none appearance-none">
+                                <option value="USD">USD 美金</option>
+                                <option value="TWD">TWD 台幣</option>
+                                <option value="JPY">JPY 日幣</option>
+                                <option value="EUR">EUR 歐元</option>
+                                <option value="CNY">CNY 人民幣</option>
+                            </select>
+                        </div>
+                        <span class="material-symbols-outlined text-gray-500 mt-5">arrow_forward</span>
+                        <div class="flex-1">
+                            <label class="text-xs text-text-secondary mb-1 block">目標幣別 (Target)</label>
+                            <select id="currency-target"
+                                class="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none appearance-none">
+                                <option value="TWD">TWD 台幣</option>
+                                <option value="JPY">JPY 日幣</option>
+                                <option value="USD">USD 美金</option>
+                                <option value="EUR">EUR 歐元</option>
+                                <option value="KRW">KRW 韓元</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit"
+                        class="w-full bg-primary text-background-dark font-bold text-lg py-4 rounded-xl mt-4 shadow-lg hover:bg-primary/90 active:scale-95 transition-all">
+                        確認新增
+                    </button>
+                </form>
+                <div class="h-8"></div> <!-- Spacer for safe area -->
+            </div>
+        </div>
+
+        <main class="flex-1 flex flex-col px-4 pb-24 overflow-y-auto w-full relative">
+
+            <!-- JS Logic -->
+            <script>
+                // 預設追蹤列表
+                const defaultPairs = [
+                    { base: 'USD', target: 'TWD', label: '美金對台幣' },
+                    { base: 'USD', target: 'JPY', label: '美金對日圓' }
+                ];
+
+                // 讀取或是使用預設
+                let pairs = JSON.parse(localStorage.getItem('stitch_currency_pairs')) || defaultPairs;
+
+                async function updateRates() {
+                    const container = document.getElementById('rates-container');
+                    const refreshBtn = document.getElementById('global-refresh');
+                    if (refreshBtn) refreshBtn.classList.add('animate-spin');
+
+                    container.innerHTML = ''; // 清空列表重新渲染
+
+                    const timeString = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+
+                    for (const pair of pairs) {
+                        // 建立卡片骨架 (Skeleton) 或 Loading 狀態
+                        const cardId = `rate-${pair.base}-${pair.target}`;
+                        const cardHTML = createCardHTML(pair, '...', timeString, true);
+                        container.insertAdjacentHTML('beforeend', cardHTML);
+
+                        // 獲取數據
+                        try {
+                            const res = await fetch(`https://open.er-api.com/v6/latest/${pair.base}`);
+                            const data = await res.json();
+                            const rate = data.rates[pair.target].toFixed(2);
+
+                            // 更新卡片數值
+                            const rateEl = document.querySelector(`#${cardId} .rate-value`);
+                            if (rateEl) {
+                                rateEl.innerText = rate;
+                                rateEl.classList.remove('animate-pulse');
+                            }
+                        } catch (e) {
+                            console.error(e);
+                        }
+                    }
+
+                    if (refreshBtn) setTimeout(() => refreshBtn.classList.remove('animate-spin'), 1000);
+                }
+
+                function createCardHTML(pair, rate, time, isLoading) {
+                    const isLive = pair.target === 'TWD' || pair.base === 'USD'; // 模擬標記
+                    return `
+                    <div class="mb-4 relative group" id="rate-${pair.base}-${pair.target}">
+                        <div class="flex items-center justify-between mb-2 px-1">
+                            <span class="text-xs font-bold text-text-secondary uppercase tracking-widest">${pair.base}/${pair.target}</span>
+                            <button onclick="removePair('${pair.base}', '${pair.target}')" class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 p-1">
+                                <span class="material-symbols-outlined text-sm">do_not_disturb_on</span>
+                            </button>
+                        </div>
+                        <div class="relative w-full rounded-2xl overflow-hidden shadow-lg bg-surface-dark mb-2 p-1 border border-white/5">
+                            <div class="relative z-10 flex flex-col p-5">
+                                <div class="flex justify-between items-start mb-1">
+                                    <span class="text-sm font-medium text-text-secondary uppercase">${pair.label || '自訂匯率'}</span>
+                                    ${isLive ? `<span class="px-2 py-1 rounded-md bg-primary/20 text-primary text-[10px] font-bold">LIVE</span>` : ''}
+                                </div>
+                                <div class="flex items-baseline gap-2 mb-4">
+                                    <span class="rate-value text-4xl font-extrabold text-white tracking-tighter ${isLoading ? 'animate-pulse' : ''}">${rate}</span>
+                                    <span class="text-sm font-medium text-text-secondary">${pair.target}</span>
+                                </div>
+                                <div class="flex items-center justify-between pt-4 border-t border-white/5">
+                                    <div class="flex items-center gap-2 text-text-secondary text-[10px]">
+                                        <span class="material-symbols-outlined" style="font-size: 14px;">schedule</span>
+                                        <span>更新於 ${time}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                }
+
+                function toggleModal(show) {
+                    const modal = document.getElementById('add-currency-modal');
+                    const content = document.getElementById('modal-content');
+                    if (show) {
+                        modal.classList.remove('hidden');
+                        setTimeout(() => content.classList.remove('translate-y-full'), 10);
+                    } else {
+                        content.classList.add('translate-y-full');
+                        setTimeout(() => modal.classList.add('hidden'), 300);
+                    }
+                }
+
+                function addCurrencyPair(e) {
+                    e.preventDefault();
+                    const base = document.getElementById('currency-base').value;
+                    const target = document.getElementById('currency-target').value;
+
+                    if (base === target) {
+                        alert('基礎幣別與目標幣別不能相同');
+                        return;
+                    }
+
+                    const newPair = { base, target, label: `${base} 對 ${target}` };
+                    pairs.push(newPair);
+                    localStorage.setItem('stitch_currency_pairs', JSON.stringify(pairs));
+
+                    updateRates();
+                    toggleModal(false);
+                }
+
+                function removePair(base, target) {
+                    if (!confirm('確定要移除此匯率卡片嗎？')) return;
+                    pairs = pairs.filter(p => !(p.base === base && p.target === target));
+                    localStorage.setItem('stitch_currency_pairs', JSON.stringify(pairs));
+                    updateRates();
+                }
+
+                window.addEventListener('load', updateRates);
+            </script>
+
+            <!-- Refresh Header -->
+            <div class="flex items-center justify-between my-4 px-1">
+                <h2 class="text-2xl font-bold text-white">我的匯率</h2>
+                <button id="global-refresh" onclick="updateRates()"
+                    class="p-2 rounded-full bg-surface-dark border border-white/10 text-primary hover:bg-white/5 transition-all">
+                    <span class="material-symbols-outlined">refresh</span>
+                </button>
+            </div>
+
+            <!-- Dynamic Rates Container -->
+            <div id="rates-container" class="flex flex-col">
+                <!-- Javascript will populate this -->
+            </div>
+
+            <div class="h-20"></div> <!-- Bottom Spacer -->
+
+        </main>
+
+        <!-- Floating Add Button -->
+        <div class="absolute bottom-24 right-6 z-30">
+            <button onclick="toggleModal(true)"
+                class="group flex items-center justify-center w-14 h-14 rounded-full bg-primary text-background-dark shadow-[0_4px_14px_rgba(83,210,45,0.4)] hover:scale-110 active:scale-95 transition-all duration-200">
+                <span class="material-symbols-outlined" style="font-size: 28px;">add</span>
+            </button>
+        </div>
+        <div
+            class="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-background-light dark:from-background-dark to-transparent pointer-events-none z-20">
+        </div>
+    </div>
+
+    <!-- iOS Bottom Tab Bar -->
+    <nav
+        class="fixed bottom-0 left-0 right-0 glass-effect ios-tab-bar px-6 flex justify-between items-center z-50 max-w-md mx-auto">
+        <a href="dashboard.html" class="flex flex-col items-center p-3 text-text-secondary">
+            <span class="material-symbols-outlined">home</span>
+            <span class="text-[10px] mt-1">首頁</span>
+        </a>
+        <a href="code.html" class="flex flex-col items-center p-3 text-primary">
+            <span class="material-symbols-outlined fill-[1]">payments</span>
+            <span class="text-[10px] mt-1 font-bold">匯率</span>
+        </a>
+        <a href="../單品庫存管理/code.html" class="flex flex-col items-center p-3 text-text-secondary">
+            <span class="material-symbols-outlined">box</span>
+            <span class="text-[10px] mt-1">庫存</span>
+        </a>
+        <a href="../落地成本計算器/code.html" class="flex flex-col items-center p-3 text-text-secondary">
+            <span class="material-symbols-outlined">receipt_long</span>
+            <span class="text-[10px] mt-1">成本</span>
+        </a>
+        <a href="../銷售記錄與利潤分析/code.html" class="flex flex-col items-center p-3 text-text-secondary">
+            <span class="material-symbols-outlined">monitoring</span>
+            <span class="text-[10px] mt-1">分析</span>
+        </a>
+    </nav>
+</body>
+
+
+</html>

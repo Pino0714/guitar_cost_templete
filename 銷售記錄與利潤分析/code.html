@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html class="dark" lang="zh-Hant">
+
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    name="viewport" />
+  <title>銷售記錄與利潤分析</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&amp;display=swap"
+    rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+    rel="stylesheet" />
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#53d22d",
+            "background-light": "#f6f8f6",
+            "background-dark": "#152012",
+            "surface-dark": "#1c2a18",
+            "input-dark": "#253420",
+          },
+          fontFamily: {
+            "display": ["Manrope", "sans-serif"]
+          },
+          borderRadius: { "DEFAULT": "1rem", "lg": "1.5rem", "xl": "2rem", "full": "9999px" },
+        },
+      },
+    }
+  </script>
+  body {
+  min-height: max(884px, 100dvh);
+  -webkit-tap-highlight-color: transparent;
+  }
+
+  .glass-effect {
+  background: rgba(31, 37, 29, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .ios-tab-bar {
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+  </style>
+</head>
+
+<body
+  class="bg-background-light dark:bg-background-dark font-display antialiased text-slate-900 dark:text-white selection:bg-primary selection:text-white">
+  <div
+    class="relative flex flex-col min-h-screen w-full max-w-md mx-auto overflow-x-hidden pb-24 shadow-2xl bg-background-light dark:bg-background-dark">
+    <header
+      class="sticky top-0 z-50 flex items-center justify-between px-4 py-4 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md">
+      <button class="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+        <span class="material-symbols-outlined text-2xl">arrow_back</span>
+      </button>
+      <h2 class="text-lg font-bold leading-tight tracking-tight flex-1 text-center pr-10">銷售記錄</h2>
+    </header>
+    <main class="flex flex-col gap-6 px-4 pt-2">
+      <section class="w-full">
+        <div onclick="updateGoal()"
+          class="flex flex-col gap-1 rounded-xl p-5 bg-surface-dark border border-white/5 relative overflow-hidden group cursor-pointer active:scale-95 transition-transform">
+          <div class="absolute -right-10 -top-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl pointer-events-none">
+          </div>
+          <div class="flex items-start justify-between relative z-10">
+            <div>
+              <p class="text-gray-400 text-sm font-medium mb-1">本月總利潤 (點擊設定目標)</p>
+              <h3 id="monthly-profit" class="text-3xl font-extrabold tracking-tight text-white">TWD 0</h3>
+            </div>
+            <div class="flex items-center gap-1 bg-primary/20 text-primary px-3 py-1.5 rounded-full">
+              <span class="material-symbols-outlined text-sm font-bold">trending_up</span>
+            </div>
+          </div>
+          <div class="mt-4 flex items-center gap-2 relative z-10">
+            <div class="h-1 flex-1 bg-white/10 rounded-full overflow-hidden">
+              <div id="profit-progress" class="h-full w-[0%] bg-primary rounded-full transition-all duration-1000">
+              </div>
+            </div>
+            <span id="profit-percent" class="text-xs text-white font-bold">0%</span>
+            <span id="profit-target-display" class="text-xs text-gray-400 font-medium">目標 TWD 50,000</span>
+          </div>
+        </div>
+      </section>
+      <section class="flex flex-col gap-4">
+        <div class="flex items-center gap-2 pb-1">
+          <span class="material-symbols-outlined text-primary">add_circle</span>
+          <h3 class="text-lg font-bold">新增交易</h3>
+        </div>
+        <form class="flex flex-col gap-4" onsubmit="handleTransactionSubmit(event)">
+          <label class="flex flex-col gap-2">
+            <span class="text-sm font-medium text-gray-300 ml-1">選擇庫存吉他 (僅顯示在庫)</span>
+            <div class="relative">
+              <select id="inventory-select" onchange="updateCostDisplay()"
+                class="w-full appearance-none bg-input-dark border border-white/10 rounded-xl px-4 py-4 pr-10 text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-base font-medium">
+                <option value="">載入中...</option>
+              </select>
+              <span
+                class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">expand_more</span>
+            </div>
+            <div class="flex items-center gap-1.5 px-1">
+              <span class="material-symbols-outlined text-xs text-gray-500">info</span>
+              <span class="text-xs text-gray-500">進貨成本: <span id="cost-display"
+                  class="text-gray-300 font-mono">-</span></span>
+            </div>
+          </label>
+          <div class="flex gap-4">
+            <label class="flex flex-col gap-2 flex-1 min-w-0">
+              <span class="text-sm font-medium text-gray-300 ml-1">售價 (TWD)</span>
+              <div class="relative">
+                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                <input id="sell-price"
+                  class="w-full bg-input-dark border border-white/10 rounded-xl pl-8 pr-4 py-4 text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-base font-medium placeholder:text-gray-600 font-mono"
+                  type="number" placeholder="0" />
+              </div>
+            </label>
+            <label class="flex flex-col gap-2 w-2/5 min-w-[140px]">
+              <span class="text-sm font-medium text-gray-300 ml-1">銷售日期</span>
+              <div class="relative">
+                <input id="sell-date"
+                  class="w-full bg-input-dark border border-white/10 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm font-medium [color-scheme:dark]"
+                  type="date" />
+              </div>
+            </label>
+          </div>
+
+          <button
+            class="w-full mt-2 bg-primary hover:bg-green-500 text-black font-bold text-lg py-4 rounded-full shadow-[0_4px_14px_0_rgba(83,210,45,0.39)] transition-transform active:scale-[0.98] flex items-center justify-center gap-2"
+            type="submit">
+            <span class="material-symbols-outlined">save</span>
+            確認售出並更新庫存
+          </button>
+        </form>
+      </section>
+      <div class="h-px w-full bg-white/5 my-2"></div>
+      <section class="flex flex-col gap-4 mb-8">
+        <div class="flex items-center justify-between px-1">
+          <h3 class="text-lg font-bold">最近銷售</h3>
+        </div>
+        <div id="recent-sales-list" class="flex flex-col gap-3">
+          <!-- JS Rendered -->
+        </div>
+      </section>
+    </main>
+    <!-- iOS Bottom Tab Bar -->
+    <nav
+      class="fixed bottom-0 left-0 right-0 glass-effect ios-tab-bar px-6 flex justify-between items-center z-50 max-w-md mx-auto">
+      <a href="../匯率追蹤器/dashboard.html" class="flex flex-col items-center p-3 text-text-secondary">
+        <span class="material-symbols-outlined">home</span>
+        <span class="text-[10px] mt-1">首頁</span>
+      </a>
+      <a href="../匯率追蹤器/code.html" class="flex flex-col items-center p-3 text-text-secondary">
+        <span class="material-symbols-outlined">payments</span>
+        <span class="text-[10px] mt-1">匯率</span>
+      </a>
+      <a href="../單品庫存管理/code.html" class="flex flex-col items-center p-3 text-text-secondary">
+        <span class="material-symbols-outlined">box</span>
+        <span class="text-[10px] mt-1">庫存</span>
+      </a>
+      <a href="../落地成本計算器/code.html" class="flex flex-col items-center p-3 text-text-secondary">
+        <span class="material-symbols-outlined">receipt_long</span>
+        <span class="text-[10px] mt-1">成本</span>
+      </a>
+      <a href="code.html" class="flex flex-col items-center p-3 text-primary">
+        <span class="material-symbols-outlined fill-[1]">monitoring</span>
+        <span class="text-[10px] mt-1 font-bold">分析</span>
+      </a>
+    </nav>
+
+  </div>
+
+  <script>
+    // 定義利潤週期：上個月 5 號 00:00 ~ 本月 4 號 23:59
+    let profitGoal = localStorage.getItem('stitch_profit_goal') || 50000;
+
+    // 獲取台灣時間並計算本月利潤
+    async function init() {
+      try {
+        let now = new Date();
+        let currentMonthStart, currentMonthEnd;
+
+        if (now.getDate() >= 5) {
+          currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 5);
+          currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 4, 23, 59, 59);
+        } else {
+          currentMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 5);
+          currentMonthEnd = new Date(now.getFullYear(), now.getMonth(), 4, 23, 59, 59);
+        }
+
+        updateInventoryDropdown();
+        calculateProfit(currentMonthStart, currentMonthEnd);
+        renderRecentSales();
+
+      } catch (e) {
+        console.error("Initialization failed", e);
+      }
+    }
+
+    function syncData() {
+      const oldUserInv = JSON.parse(localStorage.getItem('stitch_inventory')) || [];
+      if (oldUserInv.length > 0) {
+        let currentAll = JSON.parse(localStorage.getItem('stitch_inventory_all')) || [];
+        const merged = [...oldUserInv, ...currentAll];
+        localStorage.setItem('stitch_inventory_all', JSON.stringify(merged));
+        localStorage.removeItem('stitch_inventory');
+      }
+    }
+
+    function updateInventoryDropdown() {
+      syncData();
+      // 讀取所有庫存 (讀取單品庫存管理合併後的 Key)
+      const allInventory = JSON.parse(localStorage.getItem('stitch_inventory_all')) || [];
+      const inStockItems = allInventory.filter(item => item.inStock);
+
+      const select = document.getElementById('inventory-select');
+
+      if (inStockItems.length === 0) {
+        select.innerHTML = '<option value="">無庫存吉他</option>';
+        return;
+      }
+
+      select.innerHTML = '<option value="">請選擇吉他...</option>' + inStockItems.map(item => `
+        <option value="${item.id}" data-cost="${item.amount}" data-currency="${item.currency}">
+          ${item.brand} ${item.model} (${item.serial || 'N/A'})
+        </option>
+      `).join('');
+    }
+
+    function updateCostDisplay() {
+      const select = document.getElementById('inventory-select');
+      const costDisplay = document.getElementById('cost-display');
+      if (select.value) {
+        const option = select.options[select.selectedIndex];
+        const cost = option.getAttribute('data-cost');
+        const currency = option.getAttribute('data-currency');
+        costDisplay.innerText = `${currency} ${Number(cost).toLocaleString()}`;
+      } else {
+        costDisplay.innerText = '-';
+      }
+    }
+
+    function handleTransactionSubmit(e) {
+      e.preventDefault();
+      const select = document.getElementById('inventory-select');
+      const sellPrice = parseFloat(document.getElementById('sell-price').value);
+      const sellDate = document.getElementById('sell-date').value;
+
+      if (!select.value || isNaN(sellPrice) || !sellDate) {
+        alert('請填寫完整交易資訊');
+        return;
+      }
+
+      const itemId = parseInt(select.value);
+      let allInventory = JSON.parse(localStorage.getItem('stitch_inventory_all')) || [];
+      const itemIndex = allInventory.findIndex(item => item.id === itemId);
+
+      if (itemIndex !== -1) {
+        // 更新該項目為已售出
+        allInventory[itemIndex].inStock = false;
+        allInventory[itemIndex].soldPrice = sellPrice;
+        allInventory[itemIndex].soldDate = sellDate;
+
+        localStorage.setItem('stitch_inventory_all', JSON.stringify(allInventory));
+        alert('交易記錄成功！');
+        location.reload();
+      }
+    }
+
+    function calculateProfit(startDate, endDate) {
+      const allInventory = JSON.parse(localStorage.getItem('stitch_inventory_all')) || [];
+      const soldItems = allInventory.filter(item => {
+        if (item.inStock || !item.soldDate) return false;
+        const sDate = new Date(item.soldDate);
+        return sDate >= startDate && sDate <= endDate;
+      });
+
+      let totalProfit = 0;
+      soldItems.forEach(item => {
+        // 簡易匯率換算 (可根據需求調整)
+        let costTwd = parseFloat(item.amount);
+        if (item.currency === 'USD') costTwd *= 32;
+        if (item.currency === 'JPY') costTwd *= 0.22;
+
+        totalProfit += (item.soldPrice - costTwd);
+      });
+
+      document.getElementById('monthly-profit').innerText = `TWD ${Math.round(totalProfit).toLocaleString()}`;
+
+      const percent = Math.min(100, Math.max(0, (totalProfit / profitGoal) * 100));
+      document.getElementById('profit-progress').style.width = percent + '%';
+      document.getElementById('profit-percent').innerText = Math.round(percent) + '%';
+      document.getElementById('profit-target-display').innerText = `目標 TWD ${Number(profitGoal).toLocaleString()}`;
+    }
+
+    function renderRecentSales() {
+      const container = document.getElementById('recent-sales-list');
+      const allInventory = JSON.parse(localStorage.getItem('stitch_inventory_all')) || [];
+      const soldItems = allInventory.filter(item => !item.inStock && item.soldDate)
+        .sort((a, b) => new Date(b.soldDate) - new Date(a.soldDate));
+
+      if (soldItems.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">尚無銷售記錄</p>';
+        return;
+      }
+
+      container.innerHTML = soldItems.slice(0, 5).map(item => {
+        let costTwd = parseFloat(item.amount);
+        if (item.currency === 'USD') costTwd *= 32;
+        if (item.currency === 'JPY') costTwd *= 0.22;
+        const profit = item.soldPrice - costTwd;
+
+        return `
+          <div class="group flex items-center gap-4 p-4 rounded-xl bg-surface-dark border border-transparent hover:border-white/10 transition-all">
+            <div class="relative h-14 w-14 flex-shrink-0 rounded-lg overflow-hidden bg-gray-800">
+              <img src="${item.image || 'https://via.placeholder.com/150?text=Guitar'}" class="h-full w-full object-cover">
+            </div>
+            <div class="flex flex-col flex-1 min-w-0">
+              <h4 class="text-white font-bold truncate text-base">${item.brand} ${item.model}</h4>
+              <div class="flex items-center gap-2 text-xs text-gray-400">
+                <span class="material-symbols-outlined text-[14px]">calendar_today</span>
+                <span>${item.soldDate}</span>
+              </div>
+            </div>
+            <div class="flex flex-col items-end">
+              <span class="${profit >= 0 ? 'text-primary' : 'text-rose-400'} font-bold text-base">${profit >= 0 ? '+' : ''}${Math.round(profit).toLocaleString()}</span>
+              <span class="text-xs text-gray-500">TWD</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function updateGoal() {
+      const newGoal = prompt("請輸入新的每月利潤目標 (TWD):", profitGoal);
+      if (newGoal !== null && !isNaN(newGoal) && newGoal > 0) {
+        profitGoal = parseInt(newGoal);
+        localStorage.setItem('stitch_profit_goal', profitGoal);
+        location.reload();
+      }
+    }
+
+    window.onload = init;
+  </script>
+</body>
+
+</html>

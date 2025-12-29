@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html class="dark" lang="zh-Hant">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+        name="viewport" />
+    <title>單品庫存管理</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#53d22d",
+                        "background-light": "#f6f8f6",
+                        "background-dark": "#152012",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "Noto Sans TC", "sans-serif"],
+                        "mono": ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono", "Courier New", "monospace"],
+                    },
+                    borderRadius: { "DEFAULT": "1rem", "lg": "0.75rem", "xl": "1rem", "2xl": "1.5rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&amp;family=Noto+Sans+TC:wght@400;500;700&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <style>
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        body {
+            min-height: max(884px, 100dvh);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .glass-effect {
+            background: rgba(31, 37, 29, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .ios-tab-bar {
+            padding-bottom: calc(12px + env(safe-area-inset-bottom));
+        }
+    </style>
+</head>
+
+<body
+    class="bg-background-light dark:bg-background-dark font-display antialiased text-slate-900 dark:text-white selection:bg-primary selection:text-white">
+    <div
+        class="relative flex h-full min-h-screen w-full flex-col overflow-x-hidden max-w-md mx-auto shadow-2xl bg-background-light dark:bg-background-dark pb-32">
+        <div
+            class="sticky top-0 z-20 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md px-4 pt-4 pb-2">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-2xl font-extrabold leading-tight tracking-tight">單品庫存管理</h2>
+                <a href="../新增吉他庫存/code.html"
+                    class="flex items-center justify-center rounded-full h-10 w-10 bg-primary text-white hover:bg-opacity-90 transition-colors shadow-lg shadow-primary/20">
+                    <span class="material-symbols-outlined text-[24px]">add</span>
+                </a>
+            </div>
+            <div class="relative w-full">
+                <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+                    <span class="material-symbols-outlined text-slate-400 dark:text-slate-500">search</span>
+                </div>
+                <input
+                    class="block w-full h-12 rounded-full border-none bg-white dark:bg-white/10 pl-11 pr-4 text-base text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-primary shadow-sm"
+                    placeholder="搜尋序號或品牌..." type="text" value="" />
+            </div>
+            <div id="category-filter" class="flex gap-3 mt-4 overflow-x-auto no-scrollbar pb-1">
+                <button onclick="setFilter('全部')" id="filter-全部"
+                    class="flex h-9 shrink-0 items-center justify-center rounded-full bg-slate-900 dark:bg-white px-5 transition-colors">
+                    <span class="text-white dark:text-background-dark text-sm font-bold">全部</span>
+                </button>
+                <button onclick="setFilter('新品')" id="filter-新品"
+                    class="flex h-9 shrink-0 items-center justify-center rounded-full bg-white dark:bg-white/10 border border-slate-200 dark:border-transparent px-5 transition-colors hover:bg-slate-100 dark:hover:bg-white/20">
+                    <span class="text-slate-600 dark:text-slate-300 text-sm font-medium">新品</span>
+                </button>
+                <button onclick="setFilter('二手')" id="filter-二手"
+                    class="flex h-9 shrink-0 items-center justify-center rounded-full bg-white dark:bg-white/10 border border-slate-200 dark:border-transparent px-5 transition-colors hover:bg-slate-100 dark:hover:bg-white/20">
+                    <span class="text-slate-600 dark:text-slate-300 text-sm font-medium">二手</span>
+                </button>
+                <button onclick="setFilter('已售出')" id="filter-已售出"
+                    class="flex h-9 shrink-0 items-center justify-center rounded-full bg-white dark:bg-white/10 border border-slate-200 dark:border-transparent px-5 transition-colors hover:bg-slate-100 dark:hover:bg-white/20">
+                    <span class="text-slate-600 dark:text-slate-300 text-sm font-medium">已售出</span>
+                </button>
+            </div>
+        </div>
+        <div id="inventory-list" class="flex flex-col px-4 gap-4 mt-2">
+            <!-- JavaScript 會在這裡動態渲染卡片 -->
+        </div>
+        <div class="h-8"></div>
+
+        <script>
+            let currentFilter = '全部';
+
+            // 預設庫存資料
+            const defaultInventory = [
+                {
+                    id: 1, brand: 'Gibson', model: "Les Paul Standard '59", year: '1959', origin: 'USA',
+                    serial: '9 1234', status: '二手', amount: '5400', currency: 'USD',
+                    image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBM44Lt5Hru_S_NE-kyM2guicgaF5DO3G9qrdSB3ljUkzemEi9F9ezXlrhvc4tQuphid6vjOkxWfmoGERhEljIhSDNaG5FmPmTL5-Q09aV0hd50BKXNdrQ5iJQB9WT0Aue8dVT2P3AWJ1CL_zCMZz4rRRz25JDoCg8K-NWFMWUrfO7BV1dkEmVkuaIMnSYRrgOzfjXh-0O2id2UMH_3a88hvMJG3paapNFunyRRVqEzjV8t4QxFafwPWSVsJXwbaSC6N2ix6gWcU4Db',
+                    inStock: true
+                },
+                {
+                    id: 2, brand: 'Fender', model: 'Stratocaster Am Pro II', year: '2021', origin: 'USA',
+                    serial: 'US190234', status: '新品', amount: '1699', currency: 'USD',
+                    image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDwMyvtWcfT8ZVuwfcWjMbiMkVibtoJNE03a7deW6jaXV1O3L5J_6w3QkPVS-AaYaFO0eTt8sl4DRywIcGVjIhCY_EOsjMyzlMK1lj-_Th9Yn79MYn8nAWnB1AYNs604OrcJxXaEhobNzIUCOHo78Pg4HE4E7IjP99SuZNhPBomlNUhFM-CZRGpKDurc-2xST2c1sbkAPU3m_HS0AoHM-DFm5BZ2fK9GqWaN_yfehUpsQzt1ULza6CoyoBGnAeV7ZMguYAGrPYX9AMs',
+                    inStock: true
+                }
+            ];
+
+            function getCurrencySymbol(currency) {
+                switch (currency) {
+                    case 'USD': return '$';
+                    case 'JPY': return '¥';
+                    case 'TWD': return 'NT$';
+                    default: return currency + ' ';
+                }
+            }
+
+            function toggleInStock(id) {
+                let userInventory = JSON.parse(localStorage.getItem('stitch_inventory')) || [];
+
+                // 如果在使用者資料中
+                let found = userInventory.find(item => item.id === id);
+                if (found) {
+                    found.inStock = !found.inStock;
+                } else {
+                    // 如果在預設資料中，則先複製到使用者資料中並標記
+                    let defItem = defaultInventory.find(item => item.id === id);
+                    if (defItem) {
+                        defItem.inStock = !defItem.inStock;
+                        // 為了讓預設資料也能持久切換狀態，我們將其存入 localStorage
+                        // 注意：這會導致畫面出現重複項目，除非我們有一個更完整的機制
+                        // 改進方案：統一將所有資料合併存入一個 Key
+                    }
+                }
+
+                localStorage.setItem('stitch_inventory', JSON.stringify(userInventory));
+                renderInventory();
+            }
+
+            // 修正資料存儲機制：將預設資料與使用者資料合併存儲
+            function syncData() {
+                let stored = localStorage.getItem('stitch_inventory_all');
+                if (!stored) {
+                    // 第一次使用時，將預設資料存入
+                    const initialData = [...defaultInventory];
+                    localStorage.setItem('stitch_inventory_all', JSON.stringify(initialData));
+
+                    // 遷移舊的 stitch_inventory (從新增頁面過來的資料)
+                    const oldUserInv = JSON.parse(localStorage.getItem('stitch_inventory')) || [];
+                    if (oldUserInv.length > 0) {
+                        const merged = [...oldUserInv, ...initialData];
+                        localStorage.setItem('stitch_inventory_all', JSON.stringify(merged));
+                        localStorage.removeItem('stitch_inventory');
+                    }
+                } else {
+                    // 之後每次載入時，檢查是否有從「新增頁面」過來的新資料 (用原 key)
+                    const oldUserInv = JSON.parse(localStorage.getItem('stitch_inventory')) || [];
+                    if (oldUserInv.length > 0) {
+                        let currentAll = JSON.parse(localStorage.getItem('stitch_inventory_all'));
+                        const merged = [...oldUserInv, ...currentAll];
+                        localStorage.setItem('stitch_inventory_all', JSON.stringify(merged));
+                        localStorage.removeItem('stitch_inventory');
+                    }
+                }
+            }
+
+            function toggleSold(id) {
+                let currentAll = JSON.parse(localStorage.getItem('stitch_inventory_all'));
+                let found = currentAll.find(item => item.id === id);
+                if (found) {
+                    found.inStock = !found.inStock;
+                    localStorage.setItem('stitch_inventory_all', JSON.stringify(currentAll));
+                    renderInventory();
+                }
+            }
+
+            function setFilter(category) {
+                currentFilter = category;
+
+                // 更新按鈕樣式
+                const categories = ['全部', '新品', '二手', '已售出'];
+                categories.forEach(cat => {
+                    const btn = document.getElementById(`filter-${cat}`);
+                    if (cat === category) {
+                        btn.className = "flex h-9 shrink-0 items-center justify-center rounded-full bg-slate-900 dark:bg-white px-5 transition-colors";
+                        btn.querySelector('span').className = "text-white dark:text-background-dark text-sm font-bold";
+                    } else {
+                        btn.className = "flex h-9 shrink-0 items-center justify-center rounded-full bg-white dark:bg-white/10 border border-slate-200 dark:border-transparent px-5 transition-colors hover:bg-slate-100 dark:hover:bg-white/20";
+                        btn.querySelector('span').className = "text-slate-600 dark:text-slate-300 text-sm font-medium";
+                    }
+                });
+
+                renderInventory();
+            }
+
+            function renderInventory() {
+                syncData();
+                const listContainer = document.getElementById('inventory-list');
+                let allItems = JSON.parse(localStorage.getItem('stitch_inventory_all')) || [];
+
+                // 過濾邏輯
+                let filteredItems = allItems;
+                if (currentFilter === '新品') {
+                    filteredItems = allItems.filter(item => item.status === '新品' && item.inStock);
+                } else if (currentFilter === '二手') {
+                    filteredItems = allItems.filter(item => item.status === '二手' && item.inStock);
+                } else if (currentFilter === '已售出') {
+                    filteredItems = allItems.filter(item => !item.inStock);
+                }
+
+                listContainer.innerHTML = filteredItems.map(item => `
+                    <div class="group relative flex flex-col gap-3 rounded-2xl bg-white dark:bg-white/5 p-3 shadow-sm border border-slate-100 dark:border-white/5 active:scale-[0.98] transition-all duration-200 ${!item.inStock ? 'grayscale opacity-50' : ''}">
+                        <div class="flex items-start gap-4">
+                            <div class="relative shrink-0 overflow-hidden rounded-xl h-20 w-20 bg-slate-100 dark:bg-white/10">
+                                <img src="${item.image || 'https://via.placeholder.com/150?text=Guitar'}" class="h-full w-full object-cover" />
+                            </div>
+                            <div class="flex flex-1 flex-col justify-between min-h-[5rem]">
+                                <div>
+                                    <div class="flex justify-between items-start gap-2">
+                                        <h3 class="text-base font-bold text-slate-900 dark:text-white line-clamp-1">${item.brand} ${item.model}</h3>
+                                        <div onclick="toggleSold(${item.id})" class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-white/10 cursor-pointer hover:bg-primary hover:text-white transition-colors">
+                                            <span class="material-symbols-outlined text-sm">${item.inStock ? 'shopping_cart' : 'undo'}</span>
+                                        </div>
+                                    </div>
+                                    <p class="font-mono text-xs text-slate-500 dark:text-slate-400 mt-1">序號: ${item.serial || 'N/A'}</p>
+                                </div>
+                                <div class="flex items-center gap-2 mt-2">
+                                    <div class="flex flex-col flex-1">
+                                        <div class="flex items-center gap-2">
+                                            <span class="${item.status === '新品' ? 'bg-primary text-white' : 'border border-slate-200 dark:border-white/20 text-slate-600 dark:text-slate-300'} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold">
+                                                ${item.status}
+                                            </span>
+                                            <span class="inline-flex items-center gap-1 rounded-full ${item.inStock ? 'bg-primary/10 text-primary' : 'bg-slate-200 text-slate-500'} px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                                                ${item.inStock ? '庫存中' : '已售出'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-col items-end shrink-0">
+                                        <span class="text-base font-bold text-slate-900 dark:text-white">${getCurrencySymbol(item.currency)}${Number(item.amount).toLocaleString()}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            window.onload = renderInventory;
+        </script>
+        <!-- iOS Bottom Tab Bar -->
+        <nav
+            class="fixed bottom-0 left-0 right-0 glass-effect ios-tab-bar px-6 flex justify-between items-center z-50 max-w-md mx-auto">
+            <a href="../匯率追蹤器/dashboard.html" class="flex flex-col items-center p-3 text-text-secondary">
+                <span class="material-symbols-outlined">home</span>
+                <span class="text-[10px] mt-1">首頁</span>
+            </a>
+            <a href="../匯率追蹤器/code.html" class="flex flex-col items-center p-3 text-text-secondary">
+                <span class="material-symbols-outlined">payments</span>
+                <span class="text-[10px] mt-1">匯率</span>
+            </a>
+            <a href="code.html" class="flex flex-col items-center p-3 text-primary">
+                <span class="material-symbols-outlined fill-[1]">box</span>
+                <span class="text-[10px] mt-1 font-bold">庫存</span>
+            </a>
+            <a href="../落地成本計算器/code.html" class="flex flex-col items-center p-3 text-text-secondary">
+                <span class="material-symbols-outlined">receipt_long</span>
+                <span class="text-[10px] mt-1">成本</span>
+            </a>
+            <a href="../銷售記錄與利潤分析/code.html" class="flex flex-col items-center p-3 text-text-secondary">
+                <span class="material-symbols-outlined">monitoring</span>
+                <span class="text-[10px] mt-1">分析</span>
+            </a>
+        </nav>
+    </div>
+</body>
+
+</html>
