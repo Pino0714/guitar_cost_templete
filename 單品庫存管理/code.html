@@ -130,20 +130,31 @@
             class="sticky top-0 z-20 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md px-4 pt-4 pb-2">
             <div class="flex items-center justify-between mb-4">
                 <h2 class="text-2xl font-extrabold leading-tight tracking-tight">單品庫存管理</h2>
-                <a href="../新增吉他庫存/code.html"
-                    class="flex items-center justify-center rounded-full h-10 w-10 bg-primary text-white hover:bg-opacity-90 transition-colors shadow-lg shadow-primary/20">
-                    <span class="material-symbols-outlined text-[24px]">add</span>
-                </a>
+                <div class="flex gap-2">
+                    <button onclick="exportData()"
+                        class="flex items-center justify-center rounded-full h-10 w-10 bg-white dark:bg-white/10 text-slate-600 dark:text-slate-300 hover:bg-opacity-90 transition-colors shadow-sm">
+                        <span class="material-symbols-outlined text-[20px]">ios_share</span>
+                    </button>
+                    <button onclick="document.getElementById('importFile').click()"
+                        class="flex items-center justify-center rounded-full h-10 w-10 bg-white dark:bg-white/10 text-slate-600 dark:text-slate-300 hover:bg-opacity-90 transition-colors shadow-sm">
+                        <span class="material-symbols-outlined text-[20px]">download</span>
+                    </button>
+                    <a href="../新增吉他庫存/code.html"
+                        class="flex items-center justify-center rounded-full h-10 w-10 bg-primary text-white hover:bg-opacity-90 transition-colors shadow-lg shadow-primary/20">
+                        <span class="material-symbols-outlined text-[24px]">add</span>
+                    </a>
+                    <input type="file" id="importFile" class="hidden" accept=".json" onchange="importData(event)" />
+                </div>
             </div>
             <div class="relative w-full">
                 <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
                     <span class="material-symbols-outlined text-slate-400 dark:text-slate-500">search</span>
                 </div>
-                <input
+                <input id="search-input" oninput="renderInventory()"
                     class="block w-full h-12 rounded-full border-none bg-white dark:bg-white/10 pl-11 pr-4 text-base text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-primary shadow-sm"
-                    placeholder="搜尋序號或品牌..." type="text" value="" />
+                    placeholder="搜尋序號或品牌..." type="text" />
             </div>
-            <div id="category-filter" class="flex gap-3 mt-4 overflow-x-auto no-scrollbar pb-1">
+            <div id="category-filter" class="flex gap-3 mt-4 overflow-x-auto no-scrollbar pb-2">
                 <button onclick="setFilter('全部')" id="filter-全部"
                     class="flex h-9 shrink-0 items-center justify-center rounded-full bg-slate-900 dark:bg-white px-5 transition-colors">
                     <span class="text-white dark:text-background-dark text-sm font-bold">全部</span>
@@ -416,15 +427,37 @@
             function renderInventory() {
                 syncData();
                 const listContainer = document.getElementById('inventory-list');
+                const searchQuery = document.getElementById('search-input').value.toLowerCase();
                 let allItems = JSON.parse(localStorage.getItem('stitch_inventory_all')) || [];
 
                 let filteredItems = allItems;
+
+                // 搜尋過濾
+                if (searchQuery) {
+                    filteredItems = filteredItems.filter(item =>
+                        (item.brand && item.brand.toLowerCase().includes(searchQuery)) ||
+                        (item.model && item.model.toLowerCase().includes(searchQuery)) ||
+                        (item.serial && item.serial.toLowerCase().includes(searchQuery))
+                    );
+                }
+
+                // 類別過濾
                 if (currentFilter === '新品') {
-                    filteredItems = allItems.filter(item => item.status === '新品' && item.inStock);
+                    filteredItems = filteredItems.filter(item => item.status === '新品' && item.inStock);
                 } else if (currentFilter === '二手') {
-                    filteredItems = allItems.filter(item => item.status === '二手' && item.inStock);
+                    filteredItems = filteredItems.filter(item => item.status === '二手' && item.inStock);
                 } else if (currentFilter === '已售出') {
-                    filteredItems = allItems.filter(item => !item.inStock);
+                    filteredItems = filteredItems.filter(item => !item.inStock);
+                }
+
+                if (filteredItems.length === 0) {
+                    listContainer.innerHTML = `
+                        <div class="flex flex-col items-center justify-center py-20 text-slate-400">
+                            <span class="material-symbols-outlined text-6xl mb-4">inventory_2</span>
+                            <p>沒有找到相關項目</p>
+                        </div>
+                    `;
+                    return;
                 }
 
                 listContainer.innerHTML = filteredItems.map(item => `
@@ -478,6 +511,50 @@
                         </div>
                     </div>
                 `).join('');
+            }
+
+            function exportData() {
+                const data = localStorage.getItem('stitch_inventory_all');
+                if (!data) {
+                    alert('沒有可匯出的資料');
+                    return;
+                }
+                const blob = new Blob([data], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const date = new Date().toISOString().split('T')[0];
+                a.href = url;
+                a.download = `stitch_inventory_backup_${date}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            function importData(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                if (!confirm('匯入將會覆蓋目前的庫存資料，確定要繼續嗎？')) {
+                    event.target.value = '';
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    try {
+                        const content = e.target.result;
+                        // 驗證 JSON 格式
+                        JSON.parse(content);
+                        localStorage.setItem('stitch_inventory_all', content);
+                        alert('資料匯入成功！');
+                        renderInventory();
+                    } catch (err) {
+                        alert('錯誤：無效的備份檔案格式');
+                    }
+                };
+                reader.readAsText(file);
+                event.target.value = ''; // 清除 input 讓同一個檔案可以重複觸發變更
             }
 
             window.onload = renderInventory;
