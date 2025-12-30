@@ -62,6 +62,63 @@
         .ios-tab-bar {
             padding-bottom: calc(12px + env(safe-area-inset-bottom));
         }
+
+        /* Swipe to delete styles */
+        .swipe-item-wrapper {
+            position: relative;
+            overflow: hidden;
+            border-radius: 1rem;
+            margin-bottom: 1rem;
+            touch-action: pan-y;
+            /* Allow vertical scroll, handle horizontal in JS */
+            user-select: none;
+            /* Prevent text selection during swipe */
+            cursor: grab;
+        }
+
+        .swipe-item-wrapper:active {
+            cursor: grabbing;
+        }
+
+        .swipe-item-content {
+            position: relative;
+            z-index: 10;
+            transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+            background: inherit;
+            will-change: transform;
+        }
+
+        .swipe-delete-actions {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            z-index: 5;
+            width: 100%;
+        }
+
+        .swipe-delete-btn {
+            background-color: #ff3b30;
+            color: white;
+            width: 80px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.2s;
+            font-weight: bold;
+        }
+
+        .swipe-delete-btn:active {
+            filter: brightness(0.85);
+        }
+
+        .swipe-item-wrapper.swiped .swipe-item-content {
+            transform: translateX(-80px);
+        }
     </style>
 </head>
 
@@ -105,7 +162,7 @@
                 </button>
             </div>
         </div>
-        <div id="inventory-list" class="flex flex-col px-4 gap-4 mt-2">
+        <div id="inventory-list" class="flex flex-col px-4 mt-2">
             <!-- JavaScript 會在這裡動態渲染卡片 -->
         </div>
         <div class="h-8"></div>
@@ -150,9 +207,6 @@
                     let defItem = defaultInventory.find(item => item.id === id);
                     if (defItem) {
                         defItem.inStock = !defItem.inStock;
-                        // 為了讓預設資料也能持久切換狀態，我們將其存入 localStorage
-                        // 注意：這會導致畫面出現重複項目，除非我們有一個更完整的機制
-                        // 改進方案：統一將所有資料合併存入一個 Key
                     }
                 }
 
@@ -160,15 +214,12 @@
                 renderInventory();
             }
 
-            // 修正資料存儲機制：將預設資料與使用者資料合併存儲
             function syncData() {
                 let stored = localStorage.getItem('stitch_inventory_all');
                 if (!stored) {
-                    // 第一次使用時，將預設資料存入
                     const initialData = [...defaultInventory];
                     localStorage.setItem('stitch_inventory_all', JSON.stringify(initialData));
 
-                    // 遷移舊的 stitch_inventory (從新增頁面過來的資料)
                     const oldUserInv = JSON.parse(localStorage.getItem('stitch_inventory')) || [];
                     if (oldUserInv.length > 0) {
                         const merged = [...oldUserInv, ...initialData];
@@ -176,7 +227,6 @@
                         localStorage.removeItem('stitch_inventory');
                     }
                 } else {
-                    // 之後每次載入時，檢查是否有從「新增頁面」過來的新資料 (用原 key)
                     const oldUserInv = JSON.parse(localStorage.getItem('stitch_inventory')) || [];
                     if (oldUserInv.length > 0) {
                         let currentAll = JSON.parse(localStorage.getItem('stitch_inventory_all'));
@@ -197,10 +247,157 @@
                 }
             }
 
+            function deleteItem(id) {
+                if (confirm('確定要刪除此項目嗎？')) {
+                    let currentAll = JSON.parse(localStorage.getItem('stitch_inventory_all'));
+                    const filtered = currentAll.filter(item => item.id !== id);
+                    localStorage.setItem('stitch_inventory_all', JSON.stringify(filtered));
+                    renderInventory();
+                }
+            }
+
+            // --- Swipe Logic (Touch & Mouse) ---
+            let startX = 0;
+            let startY = 0;
+            let currentX = 0;
+            let isSwiping = false;
+            let isScrolling = false;
+            let activeItem = null;
+
+            // Helper: Close any currently open item
+            function closeCurrentSwiped() {
+                const openItem = document.querySelector('.swipe-item-wrapper.swiped');
+                if (openItem) {
+                    openItem.classList.remove('swiped');
+                    const content = openItem.querySelector('.swipe-item-content');
+                    if (content) content.style.transform = '';
+                }
+            }
+
+            // Universal Start Handler
+            function handleStart(clientX, clientY, target) {
+                const wrapper = target.closest('.swipe-item-wrapper');
+                if (!wrapper) return;
+
+                const currentlySwiped = document.querySelector('.swipe-item-wrapper.swiped');
+                if (currentlySwiped && currentlySwiped !== wrapper) {
+                    closeCurrentSwiped();
+                }
+
+                activeItem = wrapper;
+                startX = clientX;
+                startY = clientY;
+                isSwiping = false;
+                isScrolling = false;
+
+                const content = activeItem.querySelector('.swipe-item-content');
+                content.style.transition = 'none';
+            }
+
+            // Universal Move Handler
+            function handleMove(clientX, clientY) {
+                if (!activeItem || isScrolling) return;
+
+                const diffX = clientX - startX;
+                const diffY = clientY - startY;
+
+                // Vertical scrolling detection
+                if (!isSwiping && !isScrolling) {
+                    if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 5) {
+                        isScrolling = true;
+                        const content = activeItem.querySelector('.swipe-item-content');
+                        content.style.transition = '';
+                        return;
+                    }
+                    if (Math.abs(diffX) > 5) {
+                        isSwiping = true;
+                    }
+                }
+
+                if (isSwiping) {
+                    const isAlreadyOpen = activeItem.classList.contains('swiped');
+                    let newTranslate = diffX;
+                    if (isAlreadyOpen) {
+                        newTranslate = diffX - 80;
+                    }
+
+                    if (newTranslate > 0) newTranslate = 0;
+                    if (newTranslate < -120) newTranslate = -120;
+
+                    const content = activeItem.querySelector('.swipe-item-content');
+                    content.style.transform = `translateX(${newTranslate}px)`;
+                    currentX = newTranslate;
+                }
+            }
+
+            // Universal End Handler
+            function handleEnd() {
+                if (!activeItem) return;
+
+                const content = activeItem.querySelector('.swipe-item-content');
+                content.style.transition = 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)';
+
+                if (isSwiping) {
+                    if (currentX < -40) {
+                        activeItem.classList.add('swiped');
+                        content.style.transform = 'translateX(-80px)';
+                    } else {
+                        activeItem.classList.remove('swiped');
+                        content.style.transform = '';
+                    }
+                } else {
+                    if (activeItem.classList.contains('swiped')) {
+                        activeItem.classList.remove('swiped');
+                        content.style.transform = '';
+                    }
+                }
+
+                activeItem = null;
+                isSwiping = false;
+                isScrolling = false;
+                currentX = 0;
+            }
+
+            // --- Touch Events ---
+            function onTouchStart(e) {
+                if (e.target.closest('button') || e.target.closest('.swipe-delete-btn')) return;
+                handleStart(e.touches[0].clientX, e.touches[0].clientY, e.target);
+            }
+
+            function onTouchMove(e) {
+                if (!activeItem) return;
+                handleMove(e.touches[0].clientX, e.touches[0].clientY);
+                if (isSwiping && e.cancelable) {
+                    e.preventDefault();
+                }
+            }
+
+            function onTouchEnd(e) {
+                handleEnd();
+            }
+
+            // --- Mouse Events ---
+            function onMouseDown(e) {
+                if (e.target.closest('button') || e.target.closest('.swipe-delete-btn')) return;
+                handleStart(e.clientX, e.clientY, e.target);
+            }
+
+            function onMouseMove(e) {
+                if (e.buttons !== 1) return;
+                handleMove(e.clientX, e.clientY);
+            }
+
+            function onMouseUp(e) {
+                handleEnd();
+            }
+
+            function onMouseLeave(e) {
+                handleEnd();
+            }
+
             function setFilter(category) {
                 currentFilter = category;
 
-                // 更新按鈕樣式
                 const categories = ['全部', '新品', '二手', '已售出'];
                 categories.forEach(cat => {
                     const btn = document.getElementById(`filter-${cat}`);
@@ -221,7 +418,6 @@
                 const listContainer = document.getElementById('inventory-list');
                 let allItems = JSON.parse(localStorage.getItem('stitch_inventory_all')) || [];
 
-                // 過濾邏輯
                 let filteredItems = allItems;
                 if (currentFilter === '新品') {
                     filteredItems = allItems.filter(item => item.status === '新品' && item.inStock);
@@ -232,34 +428,50 @@
                 }
 
                 listContainer.innerHTML = filteredItems.map(item => `
-                    <div class="group relative flex flex-col gap-3 rounded-2xl bg-white dark:bg-white/5 p-3 shadow-sm border border-slate-100 dark:border-white/5 active:scale-[0.98] transition-all duration-200 ${!item.inStock ? 'grayscale opacity-50' : ''}">
-                        <div class="flex items-start gap-4">
-                            <div class="relative shrink-0 overflow-hidden rounded-xl h-20 w-20 bg-slate-100 dark:bg-white/10">
-                                <img src="${item.image || 'https://via.placeholder.com/150?text=Guitar'}" class="h-full w-full object-cover" />
-                            </div>
-                            <div class="flex flex-1 flex-col justify-between min-h-[5rem]">
-                                <div>
-                                    <div class="flex justify-between items-start gap-2">
-                                        <h3 class="text-base font-bold text-slate-900 dark:text-white line-clamp-1">${item.brand} ${item.model}</h3>
-                                        <div onclick="toggleSold(${item.id})" class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-white/10 cursor-pointer hover:bg-primary hover:text-white transition-colors">
-                                            <span class="material-symbols-outlined text-sm">${item.inStock ? 'shopping_cart' : 'undo'}</span>
-                                        </div>
+                    <div class="swipe-item-wrapper" 
+                         ontouchstart="onTouchStart(event)" 
+                         ontouchmove="onTouchMove(event)" 
+                         ontouchend="onTouchEnd(event)"
+                         onmousedown="onMouseDown(event)"
+                         onmousemove="onMouseMove(event)"
+                         onmouseup="onMouseUp(event)"
+                         onmouseleave="onMouseLeave(event)">
+                        <div class="swipe-delete-actions">
+                            <button onclick="deleteItem(${item.id})" class="swipe-delete-btn">
+                                <span class="material-symbols-outlined">delete</span>
+                            </button>
+                        </div>
+                        <div class="swipe-item-content bg-background-light dark:bg-background-dark">
+                            <div class="group relative flex flex-col gap-3 rounded-2xl bg-white dark:bg-white/5 p-3 shadow-sm border border-slate-100 dark:border-white/5 active:scale-[0.98] transition-all duration-200 ${!item.inStock ? 'grayscale opacity-50' : ''}">
+                                <div class="flex items-start gap-4">
+                                    <div class="relative shrink-0 overflow-hidden rounded-xl h-20 w-20 bg-slate-100 dark:bg-white/10">
+                                        <img src="${item.image || 'https://via.placeholder.com/150?text=Guitar'}" class="h-full w-full object-cover" />
                                     </div>
-                                    <p class="font-mono text-xs text-slate-500 dark:text-slate-400 mt-1">序號: ${item.serial || 'N/A'}</p>
-                                </div>
-                                <div class="flex items-center gap-2 mt-2">
-                                    <div class="flex flex-col flex-1">
-                                        <div class="flex items-center gap-2">
-                                            <span class="${item.status === '新品' ? 'bg-primary text-white' : 'border border-slate-200 dark:border-white/20 text-slate-600 dark:text-slate-300'} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold">
-                                                ${item.status}
-                                            </span>
-                                            <span class="inline-flex items-center gap-1 rounded-full ${item.inStock ? 'bg-primary/10 text-primary' : 'bg-slate-200 text-slate-500'} px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-                                                ${item.inStock ? '庫存中' : '已售出'}
-                                            </span>
+                                    <div class="flex flex-1 flex-col justify-between min-h-[5rem]">
+                                        <div>
+                                            <div class="flex justify-between items-start gap-2">
+                                                <h3 class="text-base font-bold text-slate-900 dark:text-white line-clamp-1">${item.brand} ${item.model}</h3>
+                                                <div onclick="toggleSold(${item.id})" class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-white/10 cursor-pointer hover:bg-primary hover:text-white transition-colors">
+                                                    <span class="material-symbols-outlined text-sm">${item.inStock ? 'shopping_cart' : 'undo'}</span>
+                                                </div>
+                                            </div>
+                                            <p class="font-mono text-xs text-slate-500 dark:text-slate-400 mt-1">序號: ${item.serial || 'N/A'}</p>
                                         </div>
-                                    </div>
-                                    <div class="flex flex-col items-end shrink-0">
-                                        <span class="text-base font-bold text-slate-900 dark:text-white">${getCurrencySymbol(item.currency)}${Number(item.amount).toLocaleString()}</span>
+                                        <div class="flex items-center gap-2 mt-2">
+                                            <div class="flex flex-col flex-1">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="${item.status === '新品' ? 'bg-primary text-white' : 'border border-slate-200 dark:border-white/20 text-slate-600 dark:text-slate-300'} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold">
+                                                        ${item.status}
+                                                    </span>
+                                                    <span class="inline-flex items-center gap-1 rounded-full ${item.inStock ? 'bg-primary/10 text-primary' : 'bg-slate-200 text-slate-500'} px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                                                        ${item.inStock ? '庫存中' : '已售出'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div class="flex flex-col items-end shrink-0">
+                                                <span class="text-base font-bold text-slate-900 dark:text-white">${getCurrencySymbol(item.currency)}${Number(item.amount).toLocaleString()}</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
