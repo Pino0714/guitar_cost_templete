@@ -207,6 +207,8 @@
             const db = getFirestore(app);
             const auth = getAuth(app);
 
+            console.log("%c🚀 FIREBASE APP LOADED - VERSION 2.1", "color: #53d22d; font-size: 16px; font-weight: bold;");
+
             // 許可名單
             const allowList = ['monkey30d@gmail.com'];
 
@@ -230,6 +232,7 @@
 
             // 1. 遷移資料 (從手機搬到雲端)
             window.migrateToCloud = async () => {
+                console.log("🚛 Starting migration...");
                 const localData = JSON.parse(localStorage.getItem('stitch_inventory_all') || '[]');
                 if (localData.length === 0) {
                     alert('手機目前沒有舊資料可以搬遷。');
@@ -238,23 +241,32 @@
 
                 if (!confirm(`發現 ${localData.length} 筆手機舊資料，要現在搬遷到雲端嗎？\n(搬遷後手機資料將被清空)`)) return;
 
-                const btn = document.querySelector('button[title="測試 Firebase 連線"]');
-                btn.disabled = true;
+                const migrateBtn = document.querySelector('button[onclick="migrateToCloud()"]');
+                if (migrateBtn) {
+                    migrateBtn.disabled = true;
+                    migrateBtn.innerText = '搬遷中...';
+                }
 
                 try {
+                    let count = 0;
                     for (const item of localData) {
                         const cloudItem = { ...item, createdAt: serverTimestamp() };
                         delete cloudItem.id; // 讓 Firestore 生成新的 ID
                         await addDoc(collection(db, "inventory"), cloudItem);
+                        count++;
+                        console.log(`✅ Migrated ${count}/${localData.length}`);
                     }
                     localStorage.removeItem('stitch_inventory_all');
                     localStorage.removeItem('stitch_inventory');
                     alert('✅ 全部資料搬遷雲端成功！');
                     window.location.reload();
                 } catch (e) {
+                    console.error("🔥 Migration failed:", e);
                     alert('❌ 搬遷失敗: ' + e.message);
-                } finally {
-                    btn.disabled = false;
+                    if (migrateBtn) {
+                        migrateBtn.disabled = false;
+                        migrateBtn.innerText = '搬遷手機舊資料到雲端';
+                    }
                 }
             };
 
@@ -320,6 +332,7 @@
                 listContainer.innerHTML = '<div class="py-20 text-center text-slate-400">讀取雲端資料中...</div>';
 
                 try {
+                    console.log("☁️ Fetching from Firestore...");
                     // 移除 query 中的 orderBy，改用 JS 排序以避免 Index 報錯與遺漏無時間戳的舊資料
                     const q = query(collection(db, "inventory"));
                     const querySnapshot = await getDocs(q);
@@ -327,6 +340,7 @@
                     querySnapshot.forEach((doc) => {
                         allItems.push({ docId: doc.id, ...doc.data() });
                     });
+                    console.log(`📦 Fetched ${allItems.length} items from cloud.`);
 
                     // 在 JS 端排序：有時間的排前面，沒時間的排後面
                     allItems.sort((a, b) => {
