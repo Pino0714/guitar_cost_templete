@@ -188,14 +188,25 @@
     const auth = getAuth(app);
     const provider = new GoogleAuthProvider();
 
+    // 許可登入的 Email 名單
+    const allowList = ['monkey30d@gmail.com'];
+
     // 把登入功能掛載到 window，這樣 HTML 的 onclick 才呼叫得到
     window.handleGoogleLogin = async () => {
       try {
         const result = await signInWithPopup(auth, provider);
-        // const user = result.user;
-        console.log("Login success");
-        // 登入成功，跳轉到首頁 (匯率追蹤器 dashboard)
-        window.location.href = '../匯率追蹤器/dashboard.html';
+        const user = result.user;
+
+        // 檢查 Email 是否在名單內
+        if (allowList.includes(user.email)) {
+          console.log("Login success:", user.email);
+          // 登入成功，跳轉到首頁 (匯率追蹤器 dashboard)
+          window.location.href = '../匯率追蹤器/dashboard.html';
+        } else {
+          // 不在名單內，強制登出
+          await auth.signOut();
+          alert("抱歉，您的帳號 (" + user.email + ") 尚未獲得授權存取此系統。");
+        }
       } catch (error) {
         console.error(error);
         alert("登入失敗: " + error.message);
