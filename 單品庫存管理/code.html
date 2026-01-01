@@ -123,7 +123,7 @@
 </head>
 
 <body
-    class="bg-background-light dark:bg-background-dark font-display antialiased text-slate-900 dark:text-white selection:bg-primary selection:text-white">
+    class="bg-background-light dark:bg-background-dark font-display antialiased text-slate-900 dark:text-white selection:bg-primary selection:text-white invisible transition-opacity duration-300">
     <div
         class="relative flex h-full min-h-screen w-full flex-col overflow-x-hidden max-w-md mx-auto shadow-2xl bg-background-light dark:bg-background-dark pb-32">
         <div
@@ -189,6 +189,8 @@
             import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
             import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+            import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
             // 2. 你的鑰匙
             const firebaseConfig = {
                 apiKey: "AIzaSyBGDUjeYPCwESykwTWStz7GLMe1ujzEr08",
@@ -203,9 +205,24 @@
             // 3. 初始化 Firebase
             const app = initializeApp(firebaseConfig);
             const db = getFirestore(app);
+            const auth = getAuth(app);
+
+            // 許可名單
+            const allowList = ['monkey30d@gmail.com'];
+
+            // 存取檢查 (Auth Guard)
+            onAuthStateChanged(auth, (user) => {
+                if (!user || !allowList.includes(user.email)) {
+                    window.location.href = '../首頁/code.html';
+                } else {
+                    document.body.classList.remove('invisible');
+                    renderInventory();
+                }
+            });
 
             // 暴露給全域
             window.db = db;
+            window.auth = auth;
 
             // --- 雲端同步核心功能 ---
 
@@ -301,11 +318,19 @@
                 listContainer.innerHTML = '<div class="py-20 text-center text-slate-400">讀取雲端資料中...</div>';
 
                 try {
-                    const q = query(collection(db, "inventory"), orderBy("createdAt", "desc"));
+                    // 移除 query 中的 orderBy，改用 JS 排序以避免 Index 報錯與遺漏無時間戳的舊資料
+                    const q = query(collection(db, "inventory"));
                     const querySnapshot = await getDocs(q);
                     let allItems = [];
                     querySnapshot.forEach((doc) => {
                         allItems.push({ docId: doc.id, ...doc.data() });
+                    });
+
+                    // 在 JS 端排序：有時間的排前面，沒時間的排後面
+                    allItems.sort((a, b) => {
+                        const dateA = a.createdAt ? (a.createdAt.seconds || new Date(a.createdAt).getTime()) : 0;
+                        const dateB = b.createdAt ? (b.createdAt.seconds || new Date(b.createdAt).getTime()) : 0;
+                        return dateB - dateA;
                     });
 
                     // 搜尋過濾
@@ -396,6 +421,7 @@
                         </div>
                     `).join('');
                 } catch (e) {
+                    console.error("Cloud Loading Error:", e);
                     listContainer.innerHTML = `<div class="py-20 text-center text-red-400">讀取失敗：${e.message}</div>`;
                 }
             };
@@ -633,8 +659,7 @@
                 reader.readAsText(file);
                 event.target.value = ''; // 清除 input 讓同一個檔案可以重複觸發變更
             }
-
-            window.onload = renderInventory;
+            // window.onload = renderInventory;
         </script>
         <!-- iOS Bottom Tab Bar -->
         <nav
