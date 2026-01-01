@@ -213,8 +213,10 @@
             // 存取檢查 (Auth Guard)
             onAuthStateChanged(auth, (user) => {
                 if (!user || !allowList.includes(user.email)) {
+                    console.warn("🔐 Unauthorized access attempt:", user ? user.email : "No User");
                     window.location.href = '../首頁/code.html';
                 } else {
+                    console.log("✅ Authorized as:", user.email);
                     document.body.classList.remove('invisible');
                     renderInventory();
                 }
