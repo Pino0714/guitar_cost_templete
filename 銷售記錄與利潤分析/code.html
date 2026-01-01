@@ -175,10 +175,25 @@
   </div>
 
   <script>
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, getDocs, doc, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBGDUjeYPCwESykwTWStz7GLMe1ujzEr08",
+      authDomain: "test-5e965.firebaseapp.com",
+      projectId: "test-5e965",
+      storageBucket: "test-5e965.firebasestorage.app",
+      messagingSenderId: "42477514336",
+      appId: "1:42477514336:web:e6495a7c4081d780c89d05",
+      measurementId: "G-G9ZEBGGZQM"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
     // 定義利潤週期：上個月 5 號 00:00 ~ 本月 4 號 23:59
     let profitGoal = localStorage.getItem('stitch_profit_goal') || 50000;
 
-    // 獲取台灣時間並計算本月利潤
     async function init() {
       try {
         let now = new Date();
@@ -192,40 +207,37 @@
           currentMonthEnd = new Date(now.getFullYear(), now.getMonth(), 4, 23, 59, 59);
         }
 
-        updateInventoryDropdown();
-        calculateProfit(currentMonthStart, currentMonthEnd);
-        renderRecentSales();
+        const allItems = await fetchDocs();
+        updateInventoryDropdown(allItems);
+        calculateProfit(allItems, currentMonthStart, currentMonthEnd);
+        renderRecentSales(allItems);
 
       } catch (e) {
         console.error("Initialization failed", e);
       }
     }
 
-    function syncData() {
-      const oldUserInv = JSON.parse(localStorage.getItem('stitch_inventory')) || [];
-      if (oldUserInv.length > 0) {
-        let currentAll = JSON.parse(localStorage.getItem('stitch_inventory_all')) || [];
-        const merged = [...oldUserInv, ...currentAll];
-        localStorage.setItem('stitch_inventory_all', JSON.stringify(merged));
-        localStorage.removeItem('stitch_inventory');
-      }
+    async function fetchDocs() {
+      const q = query(collection(db, "inventory"), orderBy("createdAt", "desc"));
+      const querySnapshot = await getDocs(q);
+      let items = [];
+      querySnapshot.forEach(doc => {
+        items.push({ docId: doc.id, ...doc.data() });
+      });
+      return items;
     }
 
-    function updateInventoryDropdown() {
-      syncData();
-      // 讀取所有庫存 (讀取單品庫存管理合併後的 Key)
-      const allInventory = JSON.parse(localStorage.getItem('stitch_inventory_all')) || [];
-      const inStockItems = allInventory.filter(item => item.inStock);
-
+    function updateInventoryDropdown(allItems) {
+      const inStockItems = allItems.filter(item => item.inStock);
       const select = document.getElementById('inventory-select');
 
       if (inStockItems.length === 0) {
-        select.innerHTML = '<option value="">無庫存吉他</option>';
+        select.innerHTML = '<option value="">無雲端庫存</option>';
         return;
       }
 
       select.innerHTML = '<option value="">請選擇吉他...</option>' + inStockItems.map(item => `
-        <option value="${item.id}" data-cost="${item.amount}" data-currency="${item.currency}">
+        <option value="${item.docId}" data-cost="${item.amount}" data-currency="${item.currency}">
           ${item.brand} ${item.model} (${item.serial || 'N/A'})
         </option>
       `).join('');
@@ -244,7 +256,7 @@
       }
     }
 
-    function handleTransactionSubmit(e) {
+    async function handleTransactionSubmit(e) {
       e.preventDefault();
       const select = document.getElementById('inventory-select');
       const sellPrice = parseFloat(document.getElementById('sell-price').value);
@@ -255,24 +267,29 @@
         return;
       }
 
-      const itemId = parseInt(select.value);
-      let allInventory = JSON.parse(localStorage.getItem('stitch_inventory_all')) || [];
-      const itemIndex = allInventory.findIndex(item => item.id === itemId);
+      const docId = select.value;
+      const btn = e.submitter;
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined">sync</span> 同步中...';
 
-      if (itemIndex !== -1) {
-        // 更新該項目為已售出
-        allInventory[itemIndex].inStock = false;
-        allInventory[itemIndex].soldPrice = sellPrice;
-        allInventory[itemIndex].soldDate = sellDate;
-
-        localStorage.setItem('stitch_inventory_all', JSON.stringify(allInventory));
-        alert('交易記錄成功！');
+      try {
+        await updateDoc(doc(db, "inventory", docId), {
+          inStock: false,
+          soldPrice: sellPrice,
+          soldDate: sellDate
+        });
+        alert('✅ 雲端交易記錄成功！');
         location.reload();
+      } catch (error) {
+        alert('❌ 交易失敗: ' + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
       }
     }
 
-    function calculateProfit(startDate, endDate) {
-      const allInventory = JSON.parse(localStorage.getItem('stitch_inventory_all')) || [];
+    function calculateProfit(allInventory, startDate, endDate) {
       const soldItems = allInventory.filter(item => {
         if (item.inStock || !item.soldDate) return false;
         const sDate = new Date(item.soldDate);
@@ -281,11 +298,9 @@
 
       let totalProfit = 0;
       soldItems.forEach(item => {
-        // 簡易匯率換算 (可根據需求調整)
         let costTwd = parseFloat(item.amount);
         if (item.currency === 'USD') costTwd *= 32;
         if (item.currency === 'JPY') costTwd *= 0.22;
-
         totalProfit += (item.soldPrice - costTwd);
       });
 
@@ -297,10 +312,9 @@
       document.getElementById('profit-target-display').innerText = `目標 TWD ${Number(profitGoal).toLocaleString()}`;
     }
 
-    function renderRecentSales() {
+    function renderRecentSales(allItems) {
       const container = document.getElementById('recent-sales-list');
-      const allInventory = JSON.parse(localStorage.getItem('stitch_inventory_all')) || [];
-      const soldItems = allInventory.filter(item => !item.inStock && item.soldDate)
+      const soldItems = allItems.filter(item => !item.inStock && item.soldDate)
         .sort((a, b) => new Date(b.soldDate) - new Date(a.soldDate));
 
       if (soldItems.length === 0) {
@@ -345,6 +359,7 @@
     }
 
     window.onload = init;
+  </script>
   </script>
 </body>
 
