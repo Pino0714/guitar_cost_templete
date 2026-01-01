@@ -256,39 +256,138 @@
             </div>
         </div>
 
-        <script>
-            let selectedImageData = null;
+        <!-- Firebase SDKs -->
+        <script type="module">
+            import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+            import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+            import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-            function previewImage(input) {
+            import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+            const firebaseConfig = {
+                apiKey: "AIzaSyBGDUjeYPCwESykwTWStz7GLMe1ujzEr08",
+                authDomain: "test-5e965.firebaseapp.com",
+                projectId: "test-5e965",
+                storageBucket: "test-5e965.firebasestorage.app",
+                messagingSenderId: "42477514336",
+                appId: "1:42477514336:web:e6495a7c4081d780c89d05",
+                measurementId: "G-G9ZEBGGZQM"
+            };
+
+            const app = initializeApp(firebaseConfig);
+            const storage = getStorage(app);
+            const db = getFirestore(app);
+            const auth = getAuth(app);
+
+            console.log("%c🚀 FIREBASE APP LOADED - VERSION 2.1", "color: #53d22d; font-size: 16px; font-weight: bold;");
+
+            // 許可名單 (轉為小寫存入)
+            const allowList = ['monkey30d@gmail.com'].map(e => e.toLowerCase());
+
+            // 存取檢查 (Auth Guard)
+            onAuthStateChanged(auth, (user) => {
+                if (!user || !allowList.includes(user.email.toLowerCase())) {
+                    console.warn("🔐 Unauthorized access attempt:", user ? user.email : "No User");
+                    window.location.href = '../首頁/code.html';
+                } else {
+                    console.log("✅ Authorized as:", user.email);
+                    document.body.classList.remove('invisible');
+                }
+            });
+
+            let selectedFile = null;
+
+            window.previewImage = function (input) {
                 if (input.files && input.files[0]) {
+                    selectedFile = input.files[0];
                     const reader = new FileReader();
                     reader.onload = function (e) {
-                        const img = new Image();
-                        img.onload = function () {
-                            // 使用 Canvas 壓縮圖片以節省 localStorage 空間
-                            const canvas = document.createElement('canvas');
-                            const MAX_WIDTH = 400;
-                            const scaleSize = MAX_WIDTH / img.width;
-                            canvas.width = MAX_WIDTH;
-                            canvas.height = img.height * scaleSize;
-
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-                            selectedImageData = canvas.toDataURL('image/jpeg', 0.7);
-
-                            const preview = document.getElementById('image-preview');
-                            const icon = document.getElementById('upload-icon');
-                            preview.src = selectedImageData;
-                            preview.classList.remove('hidden');
-                            icon.classList.add('hidden');
-                        };
-                        img.src = e.target.result;
+                        const preview = document.getElementById('image-preview');
+                        const icon = document.getElementById('upload-icon');
+                        preview.src = e.target.result;
+                        preview.classList.remove('hidden');
+                        icon.classList.add('hidden');
                     };
-                    reader.readAsDataURL(input.files[0]);
+                    reader.readAsDataURL(selectedFile);
                 }
             }
 
+            window.saveGuitar = async function () {
+                console.log("🚀 Starting saveGuitar...");
+
+                try {
+                    const brand = document.getElementById('input-brand').value;
+                    const model = document.getElementById('input-model').value;
+                    const year = document.getElementById('input-year').value;
+                    const origin = document.getElementById('input-origin').value;
+                    const serial = document.getElementById('input-serial').value;
+                    const status = document.getElementById('input-status').value;
+                    const amount = document.getElementById('input-amount').value;
+                    const currency = document.getElementById('input-currency').value;
+                    const date = document.getElementById('input-date').value;
+
+                    console.log("📦 Form data:", { brand, model, amount, date });
+
+                    if (!brand || !model) {
+                        alert('請填寫品牌與型號');
+                        return;
+                    }
+
+                    const btn = document.getElementById('save-btn');
+                    if (!btn) {
+                        console.error("❌ Button not found!");
+                        return;
+                    }
+
+                    const originalText = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="text-black text-lg font-bold tracking-tight">儲存中...</span>';
+
+                    let imageUrl = '';
+
+                    // 1. 如果有選檔案，先上傳到 Firebase Storage
+                    if (selectedFile) {
+                        console.log("📸 Uploading image:", selectedFile.name);
+                        const storageRef = ref(storage, 'guitar_images/' + Date.now() + '_' + selectedFile.name);
+                        const snapshot = await uploadBytes(storageRef, selectedFile);
+                        imageUrl = await getDownloadURL(snapshot.ref);
+                        console.log("🔗 Image URL:", imageUrl);
+                    }
+
+                    // 2. 建立新資料物件
+                    const newGuitar = {
+                        brand, model, year, origin, serial, status,
+                        amount: parseFloat(amount) || 0,
+                        currency,
+                        date,
+                        image: imageUrl,
+                        inStock: true,
+                        createdAt: serverTimestamp()
+                    };
+
+                    console.log("☁️ Saving to Firestore...");
+                    // 3. 存入 Firestore (雲端同步)
+                    const docRef = await addDoc(collection(db, "inventory"), newGuitar);
+                    console.log("✅ Success! ID:", docRef.id);
+
+                    alert('✅ 雲端儲存成功！');
+                    // 暫時註解掉跳轉,方便除錯
+                    // window.location.href = '../單品庫存管理/code.html';
+
+                } catch (error) {
+                    console.error("🔥 Error saving guitar:", error);
+                    alert("❌ 儲存失敗: " + error.message);
+                } finally {
+                    const btn = document.getElementById('save-btn');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<span class="text-black text-lg font-bold tracking-tight">新增</span>';
+                    }
+                }
+            }
+        </script>
+
+        <script>
             function setStatus(status) {
                 const btnNew = document.getElementById('btn-status-new');
                 const btnUsed = document.getElementById('btn-status-used');
@@ -304,40 +403,10 @@
                     btnNew.className = 'flex-1 rounded-full py-2 text-sm font-medium text-gray-500 dark:text-text-secondary transition-all';
                 }
             }
-
-            function saveGuitar() {
-                const brand = document.getElementById('input-brand').value;
-                const model = document.getElementById('input-model').value;
-                const year = document.getElementById('input-year').value;
-                const origin = document.getElementById('input-origin').value;
-                const serial = document.getElementById('input-serial').value;
-                const status = document.getElementById('input-status').value;
-                const amount = document.getElementById('input-amount').value;
-                const currency = document.getElementById('input-currency').value;
-
-                if (!brand || !model) {
-                    alert('請填寫品牌與型號');
-                    return;
-                }
-
-                const newGuitar = {
-                    id: Date.now(),
-                    brand, model, year, origin, serial, status, amount, currency,
-                    date: document.getElementById('input-date').value,
-                    image: selectedImageData,
-                    inStock: true
-                };
-
-                let inventory = JSON.parse(localStorage.getItem('stitch_inventory')) || [];
-                inventory.unshift(newGuitar);
-                localStorage.setItem('stitch_inventory', JSON.stringify(inventory));
-
-                window.location.href = '../單品庫存管理/code.html';
-            }
         </script>
 
         <div class="fixed bottom-[90px] left-0 right-0 p-4 z-40 max-w-md mx-auto">
-            <button onclick="saveGuitar()"
+            <button id="save-btn" onclick="saveGuitar()"
                 class="w-full h-14 bg-primary hover:bg-[#45b825] active:scale-[0.98] transition-all rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(83,210,45,0.3)]">
                 <span class="text-black text-lg font-bold tracking-tight">新增</span>
             </button>
