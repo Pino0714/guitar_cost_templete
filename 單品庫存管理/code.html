@@ -187,7 +187,7 @@
         <script type="module">
             // 1. 引入必要的 Firebase 功能
             import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-            import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+            import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
             // 2. 你的鑰匙
             const firebaseConfig = {
@@ -204,34 +204,246 @@
             const app = initializeApp(firebaseConfig);
             const db = getFirestore(app);
 
-            console.log("Firebase 已經準備好與你的網頁連線了！");
-
-            // 為了讓全域也能使用，我們將它們掛載到 window
-            window.firebaseApp = app;
+            // 暴露給全域
             window.db = db;
 
-            // 4. 測試連線功能
+            // --- 雲端同步核心功能 ---
+
+            // 1. 遷移資料 (從手機搬到雲端)
+            window.migrateToCloud = async () => {
+                const localData = JSON.parse(localStorage.getItem('stitch_inventory_all') || '[]');
+                if (localData.length === 0) {
+                    alert('手機目前沒有舊資料可以搬遷。');
+                    return;
+                }
+
+                if (!confirm(`發現 ${localData.length} 筆手機舊資料，要現在搬遷到雲端嗎？\n(搬遷後手機資料將被清空)`)) return;
+
+                const btn = document.querySelector('button[title="測試 Firebase 連線"]');
+                btn.disabled = true;
+
+                try {
+                    for (const item of localData) {
+                        const cloudItem = { ...item, createdAt: serverTimestamp() };
+                        delete cloudItem.id; // 讓 Firestore 生成新的 ID
+                        await addDoc(collection(db, "inventory"), cloudItem);
+                    }
+                    localStorage.removeItem('stitch_inventory_all');
+                    localStorage.removeItem('stitch_inventory');
+                    alert('✅ 全部資料搬遷雲端成功！');
+                    window.location.reload();
+                } catch (e) {
+                    alert('❌ 搬遷失敗: ' + e.message);
+                } finally {
+                    btn.disabled = false;
+                }
+            };
+
+            // 2. 全域刪除
+            window.deleteItem = async (docId) => {
+                if (!confirm('確定要從雲端刪除此項目嗎？')) return;
+                try {
+                    await deleteDoc(doc(db, "inventory", docId));
+                    renderInventory();
+                } catch (e) {
+                    alert('刪除失敗: ' + e.message);
+                }
+            };
+
+            // 3. 全域切換庫存狀態
+            window.toggleSold = async (docId, currentStatus) => {
+                try {
+                    await updateDoc(doc(db, "inventory", docId), {
+                        inStock: !currentStatus
+                    });
+                    renderInventory();
+                } catch (e) {
+                    alert('更新失敗: ' + e.message);
+                }
+            };
+
+            // 4. 測試連線
             window.testConnection = async () => {
                 try {
-                    console.log("嘗試寫入測試資料...");
                     const docRef = await addDoc(collection(db, "test_connection"), {
                         timestamp: new Date(),
-                        message: "Hello from Guitar Inventory!",
-                        user: "Test User"
+                        message: "Hello from Cloud!"
                     });
-                    console.log("Document written with ID: ", docRef.id);
-                    alert("✅ 連線成功！已寫入一筆測試資料到 Firestore。\nID: " + docRef.id);
+                    alert("✅ 連線成功！雲端 ID: " + docRef.id);
                 } catch (e) {
-                    console.error("Error adding document: ", e);
-                    alert("❌ 連線失敗！請檢查 Console (F12) 的錯誤訊息。\n可能是權限問題或是網路問題。");
+                    alert("❌ 連線失敗: " + e.message);
                 }
             }
+
+            // --- 頁面邏輯 ---
+            let currentFilter = '全部';
+
+            window.setFilter = (category) => {
+                currentFilter = category;
+                const categories = ['全部', '新品', '二手', '已售出'];
+                categories.forEach(cat => {
+                    const btn = document.getElementById(`filter-${cat}`);
+                    if (cat === category) {
+                        btn.className = "flex h-9 shrink-0 items-center justify-center rounded-full bg-slate-900 dark:bg-white px-5 transition-colors";
+                        btn.querySelector('span').className = "text-white dark:text-background-dark text-sm font-bold";
+                    } else {
+                        btn.className = "flex h-9 shrink-0 items-center justify-center rounded-full bg-white dark:bg-white/10 border border-slate-200 dark:border-transparent px-5 transition-colors hover:bg-slate-100 dark:hover:bg-white/20";
+                        btn.querySelector('span').className = "text-slate-600 dark:text-slate-300 text-sm font-medium";
+                    }
+                });
+                renderInventory();
+            };
+
+            window.renderInventory = async () => {
+                const listContainer = document.getElementById('inventory-list');
+                const searchQuery = document.getElementById('search-input').value.toLowerCase();
+
+                listContainer.innerHTML = '<div class="py-20 text-center text-slate-400">讀取雲端資料中...</div>';
+
+                try {
+                    const q = query(collection(db, "inventory"), orderBy("createdAt", "desc"));
+                    const querySnapshot = await getDocs(q);
+                    let allItems = [];
+                    querySnapshot.forEach((doc) => {
+                        allItems.push({ docId: doc.id, ...doc.data() });
+                    });
+
+                    // 搜尋過濾
+                    let filteredItems = allItems.filter(item =>
+                        (item.brand && item.brand.toLowerCase().includes(searchQuery)) ||
+                        (item.model && item.model.toLowerCase().includes(searchQuery)) ||
+                        (item.serial && item.serial.toLowerCase().includes(searchQuery))
+                    );
+
+                    // 類別過濾
+                    if (currentFilter === '新品') {
+                        filteredItems = filteredItems.filter(item => item.status === '新品' && item.inStock);
+                    } else if (currentFilter === '二手') {
+                        filteredItems = filteredItems.filter(item => item.status === '二手' && item.inStock);
+                    } else if (currentFilter === '已售出') {
+                        filteredItems = filteredItems.filter(item => !item.inStock);
+                    }
+
+                    if (filteredItems.length === 0) {
+                        listContainer.innerHTML = `
+                            <div class="flex flex-col items-center justify-center py-20 text-slate-400">
+                                <span class="material-symbols-outlined text-6xl mb-4">inventory_2</span>
+                                <p>沒有找到相關項目</p>
+                                ${allItems.length === 0 ? '<button onclick="migrateToCloud()" class="mt-4 text-primary underline">搬遷手機舊資料到雲端</button>' : ''}
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    function getCurrencySymbol(currency) {
+                        switch (currency) {
+                            case 'USD': return '$';
+                            case 'JPY': return '¥';
+                            case 'TWD': return 'NT$';
+                            default: return (currency || '') + ' ';
+                        }
+                    }
+
+                    listContainer.innerHTML = filteredItems.map(item => `
+                        <div class="swipe-item-wrapper" 
+                             ontouchstart="onTouchStart(event)" 
+                             ontouchmove="onTouchMove(event)" 
+                             ontouchend="onTouchEnd(event)"
+                             onmousedown="onMouseDown(event)"
+                             onmousemove="onMouseMove(event)"
+                             onmouseup="onMouseUp(event)"
+                             onmouseleave="onMouseLeave(event)">
+                            <div class="swipe-delete-actions">
+                                <button onclick="deleteItem('${item.docId}')" class="swipe-delete-btn">
+                                    <span class="material-symbols-outlined">delete</span>
+                                </button>
+                            </div>
+                            <div class="swipe-item-content bg-background-light dark:bg-background-dark">
+                                <div class="group relative flex flex-col gap-3 rounded-2xl bg-white dark:bg-white/5 p-3 shadow-sm border border-slate-100 dark:border-white/5 active:scale-[0.98] transition-all duration-200 ${!item.inStock ? 'grayscale opacity-50' : ''}">
+                                    <div class="flex items-start gap-4">
+                                        <div class="relative shrink-0 overflow-hidden rounded-xl h-20 w-20 bg-slate-100 dark:bg-white/10">
+                                            <img src="${item.image || 'https://via.placeholder.com/150?text=Guitar'}" class="h-full w-full object-cover" />
+                                        </div>
+                                        <div class="flex flex-1 flex-col justify-between min-h-[5rem]">
+                                            <div>
+                                                <div class="flex justify-between items-start gap-2">
+                                                    <h3 class="text-base font-bold text-slate-900 dark:text-white line-clamp-1">${item.brand} ${item.model}</h3>
+                                                    <div onclick="toggleSold('${item.docId}', ${item.inStock})" class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-white/10 cursor-pointer hover:bg-primary hover:text-white transition-colors">
+                                                        <span class="material-symbols-outlined text-sm">${item.inStock ? 'shopping_cart' : 'undo'}</span>
+                                                    </div>
+                                                </div>
+                                                <p class="font-mono text-xs text-slate-500 dark:text-slate-400 mt-1">序號: ${item.serial || 'N/A'}</p>
+                                            </div>
+                                            <div class="flex items-center gap-2 mt-2">
+                                                <div class="flex flex-col flex-1">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="${item.status === '新品' ? 'bg-primary text-white' : 'border border-slate-200 dark:border-white/20 text-slate-600 dark:text-slate-300'} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold">
+                                                            ${item.status}
+                                                        </span>
+                                                        <span class="inline-flex items-center gap-1 rounded-full ${item.inStock ? 'bg-primary/10 text-primary' : 'bg-slate-200 text-slate-500'} px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                                                            ${item.inStock ? '庫存中' : '已售出'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div class="flex flex-col items-end shrink-0">
+                                                    <span class="text-base font-bold text-slate-900 dark:text-white">${getCurrencySymbol(item.currency)}${Number(item.amount || 0).toLocaleString()}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                } catch (e) {
+                    listContainer.innerHTML = `<div class="py-20 text-center text-red-400">讀取失敗：${e.message}</div>`;
+                }
+            };
+
+            window.exportData = async () => {
+                try {
+                    const querySnapshot = await getDocs(collection(db, "inventory"));
+                    let data = [];
+                    querySnapshot.forEach(doc => data.push(doc.data()));
+
+                    if (data.length === 0) {
+                        alert('沒有可匯出的雲端資料');
+                        return;
+                    }
+
+                    const headers = ['品牌', '型號', '序號', '狀態', '庫存狀態', '幣別', '金額', '圖片網址'];
+                    const rows = data.map(item => [
+                        `"${(item.brand || '').replace(/"/g, '""')}"`,
+                        `"${(item.model || '').replace(/"/g, '""')}"`,
+                        `"${(item.serial || '').replace(/"/g, '""')}"`,
+                        item.status,
+                        item.inStock ? '庫存中' : '已售出',
+                        item.currency,
+                        item.amount,
+                        item.image || ''
+                    ]);
+
+                    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+                    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    const date = new Date().toISOString().split('T')[0];
+                    a.href = url;
+                    a.download = `吉他庫存雲端報表_${date}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                } catch (e) {
+                    alert('匯出失敗: ' + e.message);
+                }
+            };
+
+            window.onload = renderInventory;
         </script>
 
         <script>
-            let currentFilter = '全部';
-
-            // 預設庫存資料
+            // 預設庫存資料 (不再使用，但保留以防萬一)
             const defaultInventory = [
                 {
                     id: 1, brand: 'Gibson', model: "Les Paul Standard '59", year: '1959', origin: 'USA',
@@ -247,75 +459,15 @@
                 }
             ];
 
-            function getCurrencySymbol(currency) {
-                switch (currency) {
-                    case 'USD': return '$';
-                    case 'JPY': return '¥';
-                    case 'TWD': return 'NT$';
-                    default: return currency + ' ';
-                }
-            }
-
-            function toggleInStock(id) {
-                let userInventory = JSON.parse(localStorage.getItem('stitch_inventory')) || [];
-
-                // 如果在使用者資料中
-                let found = userInventory.find(item => item.id === id);
-                if (found) {
-                    found.inStock = !found.inStock;
-                } else {
-                    // 如果在預設資料中，則先複製到使用者資料中並標記
-                    let defItem = defaultInventory.find(item => item.id === id);
-                    if (defItem) {
-                        defItem.inStock = !defItem.inStock;
-                    }
-                }
-
-                localStorage.setItem('stitch_inventory', JSON.stringify(userInventory));
-                renderInventory();
-            }
-
-            function syncData() {
-                let stored = localStorage.getItem('stitch_inventory_all');
-                if (!stored) {
-                    const initialData = [...defaultInventory];
-                    localStorage.setItem('stitch_inventory_all', JSON.stringify(initialData));
-
-                    const oldUserInv = JSON.parse(localStorage.getItem('stitch_inventory')) || [];
-                    if (oldUserInv.length > 0) {
-                        const merged = [...oldUserInv, ...initialData];
-                        localStorage.setItem('stitch_inventory_all', JSON.stringify(merged));
-                        localStorage.removeItem('stitch_inventory');
-                    }
-                } else {
-                    const oldUserInv = JSON.parse(localStorage.getItem('stitch_inventory')) || [];
-                    if (oldUserInv.length > 0) {
-                        let currentAll = JSON.parse(localStorage.getItem('stitch_inventory_all'));
-                        const merged = [...oldUserInv, ...currentAll];
-                        localStorage.setItem('stitch_inventory_all', JSON.stringify(merged));
-                        localStorage.removeItem('stitch_inventory');
-                    }
-                }
-            }
-
-            function toggleSold(id) {
-                let currentAll = JSON.parse(localStorage.getItem('stitch_inventory_all'));
-                let found = currentAll.find(item => item.id === id);
-                if (found) {
-                    found.inStock = !found.inStock;
-                    localStorage.setItem('stitch_inventory_all', JSON.stringify(currentAll));
-                    renderInventory();
-                }
-            }
-
-            function deleteItem(id) {
-                if (confirm('確定要刪除此項目嗎？')) {
-                    let currentAll = JSON.parse(localStorage.getItem('stitch_inventory_all'));
-                    const filtered = currentAll.filter(item => item.id !== id);
-                    localStorage.setItem('stitch_inventory_all', JSON.stringify(filtered));
-                    renderInventory();
-                }
-            }
+            // 以下函數已移至 type="module" 腳本中，此處僅為兼容性保留或待移除
+            // function getCurrencySymbol(currency) { /* ... */ }
+            // function toggleInStock(id) { /* ... */ }
+            // function syncData() { /* ... */ }
+            // function toggleSold(id) { /* ... */ }
+            // function deleteItem(id) { /* ... */ }
+            // function setFilter(category) { /* ... */ }
+            // function renderInventory() { /* ... */ }
+            // function exportData() { /* ... */ }
 
             // --- Swipe Logic (Touch & Mouse) ---
             let startX = 0;
@@ -454,131 +606,6 @@
 
             function onMouseLeave(e) {
                 handleEnd();
-            }
-
-            function setFilter(category) {
-                currentFilter = category;
-
-                const categories = ['全部', '新品', '二手', '已售出'];
-                categories.forEach(cat => {
-                    const btn = document.getElementById(`filter-${cat}`);
-                    if (cat === category) {
-                        btn.className = "flex h-9 shrink-0 items-center justify-center rounded-full bg-slate-900 dark:bg-white px-5 transition-colors";
-                        btn.querySelector('span').className = "text-white dark:text-background-dark text-sm font-bold";
-                    } else {
-                        btn.className = "flex h-9 shrink-0 items-center justify-center rounded-full bg-white dark:bg-white/10 border border-slate-200 dark:border-transparent px-5 transition-colors hover:bg-slate-100 dark:hover:bg-white/20";
-                        btn.querySelector('span').className = "text-slate-600 dark:text-slate-300 text-sm font-medium";
-                    }
-                });
-
-                renderInventory();
-            }
-
-            function renderInventory() {
-                syncData();
-                const listContainer = document.getElementById('inventory-list');
-                const searchQuery = document.getElementById('search-input').value.toLowerCase();
-                let allItems = JSON.parse(localStorage.getItem('stitch_inventory_all')) || [];
-
-                let filteredItems = allItems;
-
-                // 搜尋過濾
-                if (searchQuery) {
-                    filteredItems = filteredItems.filter(item =>
-                        (item.brand && item.brand.toLowerCase().includes(searchQuery)) ||
-                        (item.model && item.model.toLowerCase().includes(searchQuery)) ||
-                        (item.serial && item.serial.toLowerCase().includes(searchQuery))
-                    );
-                }
-
-                // 類別過濾
-                if (currentFilter === '新品') {
-                    filteredItems = filteredItems.filter(item => item.status === '新品' && item.inStock);
-                } else if (currentFilter === '二手') {
-                    filteredItems = filteredItems.filter(item => item.status === '二手' && item.inStock);
-                } else if (currentFilter === '已售出') {
-                    filteredItems = filteredItems.filter(item => !item.inStock);
-                }
-
-                if (filteredItems.length === 0) {
-                    listContainer.innerHTML = `
-                        <div class="flex flex-col items-center justify-center py-20 text-slate-400">
-                            <span class="material-symbols-outlined text-6xl mb-4">inventory_2</span>
-                            <p>沒有找到相關項目</p>
-                        </div>
-                    `;
-                    return;
-                }
-
-                listContainer.innerHTML = filteredItems.map(item => `
-                    <div class="swipe-item-wrapper" 
-                         ontouchstart="onTouchStart(event)" 
-                         ontouchmove="onTouchMove(event)" 
-                         ontouchend="onTouchEnd(event)"
-                         onmousedown="onMouseDown(event)"
-                         onmousemove="onMouseMove(event)"
-                         onmouseup="onMouseUp(event)"
-                         onmouseleave="onMouseLeave(event)">
-                        <div class="swipe-delete-actions">
-                            <button onclick="deleteItem(${item.id})" class="swipe-delete-btn">
-                                <span class="material-symbols-outlined">delete</span>
-                            </button>
-                        </div>
-                        <div class="swipe-item-content bg-background-light dark:bg-background-dark">
-                            <div class="group relative flex flex-col gap-3 rounded-2xl bg-white dark:bg-white/5 p-3 shadow-sm border border-slate-100 dark:border-white/5 active:scale-[0.98] transition-all duration-200 ${!item.inStock ? 'grayscale opacity-50' : ''}">
-                                <div class="flex items-start gap-4">
-                                    <div class="relative shrink-0 overflow-hidden rounded-xl h-20 w-20 bg-slate-100 dark:bg-white/10">
-                                        <img src="${item.image || 'https://via.placeholder.com/150?text=Guitar'}" class="h-full w-full object-cover" />
-                                    </div>
-                                    <div class="flex flex-1 flex-col justify-between min-h-[5rem]">
-                                        <div>
-                                            <div class="flex justify-between items-start gap-2">
-                                                <h3 class="text-base font-bold text-slate-900 dark:text-white line-clamp-1">${item.brand} ${item.model}</h3>
-                                                <div onclick="toggleSold(${item.id})" class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-white/10 cursor-pointer hover:bg-primary hover:text-white transition-colors">
-                                                    <span class="material-symbols-outlined text-sm">${item.inStock ? 'shopping_cart' : 'undo'}</span>
-                                                </div>
-                                            </div>
-                                            <p class="font-mono text-xs text-slate-500 dark:text-slate-400 mt-1">序號: ${item.serial || 'N/A'}</p>
-                                        </div>
-                                        <div class="flex items-center gap-2 mt-2">
-                                            <div class="flex flex-col flex-1">
-                                                <div class="flex items-center gap-2">
-                                                    <span class="${item.status === '新品' ? 'bg-primary text-white' : 'border border-slate-200 dark:border-white/20 text-slate-600 dark:text-slate-300'} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold">
-                                                        ${item.status}
-                                                    </span>
-                                                    <span class="inline-flex items-center gap-1 rounded-full ${item.inStock ? 'bg-primary/10 text-primary' : 'bg-slate-200 text-slate-500'} px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-                                                        ${item.inStock ? '庫存中' : '已售出'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div class="flex flex-col items-end shrink-0">
-                                                <span class="text-base font-bold text-slate-900 dark:text-white">${getCurrencySymbol(item.currency)}${Number(item.amount).toLocaleString()}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `).join('');
-            }
-
-            function exportData() {
-                const data = localStorage.getItem('stitch_inventory_all');
-                if (!data) {
-                    alert('沒有可匯出的資料');
-                    return;
-                }
-                const blob = new Blob([data], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                const date = new Date().toISOString().split('T')[0];
-                a.href = url;
-                a.download = `stitch_inventory_backup_${date}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
             }
 
             function importData(event) {
