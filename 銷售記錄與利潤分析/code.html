@@ -52,7 +52,7 @@
 </head>
 
 <body
-  class="bg-background-light dark:bg-background-dark font-display antialiased text-slate-900 dark:text-white selection:bg-primary selection:text-white">
+  class="bg-background-light dark:bg-background-dark font-display antialiased text-slate-900 dark:text-white selection:bg-primary selection:text-white invisible transition-opacity duration-300">
   <div
     class="relative flex flex-col min-h-screen w-full max-w-md mx-auto overflow-x-hidden pb-24 shadow-2xl bg-background-light dark:bg-background-dark">
     <header
@@ -174,9 +174,11 @@
 
   </div>
 
-  <script>
+  <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getFirestore, collection, getDocs, doc, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBGDUjeYPCwESykwTWStz7GLMe1ujzEr08",
@@ -190,11 +192,29 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    console.log("%c🚀 FIREBASE APP LOADED - VERSION 2.2 (Sales)", "color: #53d22d; font-size: 16px; font-weight: bold;");
+
+    // 許可名單
+    const allowList = ['monkey30d@gmail.com'];
+
+    // 存取檢查 (Auth Guard)
+    onAuthStateChanged(auth, (user) => {
+      if (!user || !allowList.includes(user.email)) {
+        console.warn("🔐 Unauthorized access attempt:", user ? user.email : "No User");
+        window.location.href = '../首頁/code.html';
+      } else {
+        console.log("✅ Authorized as:", user.email);
+        document.body.classList.remove('invisible');
+        init();
+      }
+    });
 
     // 定義利潤週期：上個月 5 號 00:00 ~ 本月 4 號 23:59
     let profitGoal = localStorage.getItem('stitch_profit_goal') || 50000;
 
-    async function init() {
+    window.init = async function () {
       try {
         let now = new Date();
         let currentMonthStart, currentMonthEnd;
@@ -218,11 +238,19 @@
     }
 
     async function fetchDocs() {
-      const q = query(collection(db, "inventory"), orderBy("createdAt", "desc"));
+      console.log("☁️ Fetching from Firestore...");
+      const q = query(collection(db, "inventory"));
       const querySnapshot = await getDocs(q);
       let items = [];
       querySnapshot.forEach(doc => {
         items.push({ docId: doc.id, ...doc.data() });
+      });
+      console.log(`📦 Fetched ${items.length} items from cloud.`);
+      // 在 JS 端排序
+      items.sort((a, b) => {
+        const dateA = a.createdAt ? (a.createdAt.seconds || new Date(a.createdAt).getTime()) : 0;
+        const dateB = b.createdAt ? (b.createdAt.seconds || new Date(b.createdAt).getTime()) : 0;
+        return dateB - dateA;
       });
       return items;
     }
@@ -243,7 +271,7 @@
       `).join('');
     }
 
-    function updateCostDisplay() {
+    window.updateCostDisplay = function () {
       const select = document.getElementById('inventory-select');
       const costDisplay = document.getElementById('cost-display');
       if (select.value) {
@@ -256,7 +284,7 @@
       }
     }
 
-    async function handleTransactionSubmit(e) {
+    window.handleTransactionSubmit = async function (e) {
       e.preventDefault();
       const select = document.getElementById('inventory-select');
       const sellPrice = parseFloat(document.getElementById('sell-price').value);
@@ -268,7 +296,7 @@
       }
 
       const docId = select.value;
-      const btn = e.submitter;
+      const btn = e.submitter || document.querySelector('button[type="submit"]');
       const originalText = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="material-symbols-outlined">sync</span> 同步中...';
@@ -282,6 +310,7 @@
         alert('✅ 雲端交易記錄成功！');
         location.reload();
       } catch (error) {
+        console.error(error);
         alert('❌ 交易失敗: ' + error.message);
       } finally {
         btn.disabled = false;
@@ -349,7 +378,7 @@
       }).join('');
     }
 
-    function updateGoal() {
+    window.updateGoal = function () {
       const newGoal = prompt("請輸入新的每月利潤目標 (TWD):", profitGoal);
       if (newGoal !== null && !isNaN(newGoal) && newGoal > 0) {
         profitGoal = parseInt(newGoal);
@@ -358,8 +387,7 @@
       }
     }
 
-    window.onload = init;
-  </script>
+    // window.onload = init; // 移除此行，由 onAuthStateChanged 統一觸發
   </script>
 </body>
 
